@@ -56,6 +56,54 @@ class NextPayoutEstimate {
   final int amountMinor;
 }
 
+enum TimesheetSortField {
+  date,
+  duration,
+  amount;
+}
+
+class TimesheetFilters {
+  const TimesheetFilters({
+    required this.begin,
+    required this.end,
+    this.appProjectId,
+    this.searchText,
+    this.sortField = TimesheetSortField.date,
+    this.sortAscending = false,
+  });
+
+  final DateTime begin;
+  final DateTime end;
+  final String? appProjectId;
+  final String? searchText;
+  final TimesheetSortField sortField;
+  final bool sortAscending;
+}
+
+class TimesheetEntry {
+  const TimesheetEntry({
+    required this.timesheet,
+    required this.projectName,
+    required this.projectColor,
+    required this.hourlyRateMinor,
+  });
+
+  final Timesheet timesheet;
+  final String projectName;
+  final String? projectColor;
+  final int? hourlyRateMinor;
+}
+
+class TimesheetProjectOption {
+  const TimesheetProjectOption({
+    required this.appProjectId,
+    required this.name,
+  });
+
+  final String appProjectId;
+  final String name;
+}
+
 class TimesheetsRepository {
   TimesheetsRepository(this._database);
 
@@ -76,6 +124,71 @@ class TimesheetsRepository {
       ..orderBy([(table) => OrderingTerm.asc(table.beginAt)]);
 
     return query.watch();
+  }
+
+  Stream<List<TimesheetEntry>> watchTimesheetsFiltered(
+    TimesheetFilters filters,
+  ) {
+    return _timesheetsFilteredQuery(filters).watch().map(_mapTimesheetEntries);
+  }
+
+  Future<List<TimesheetEntry>> getTimesheetsFiltered(
+    TimesheetFilters filters,
+  ) async {
+    final rows = await _timesheetsFilteredQuery(filters).get();
+
+    return _mapTimesheetEntries(rows);
+  }
+
+  Stream<TimesheetSummary> watchTimesheetTotals(TimesheetFilters filters) {
+    return watchTimesheetsFiltered(filters).map((items) {
+      return TimesheetSummary(
+        totalSeconds: items.fold(
+          0,
+          (sum, item) => sum + item.timesheet.durationSeconds,
+        ),
+        amountMinor: items.fold(
+          0,
+          (sum, item) => sum + (item.timesheet.amountMinor ?? 0),
+        ),
+        entryCount: items.length,
+      );
+    });
+  }
+
+  Future<List<TimesheetProjectOption>> getAvailableTimesheetProjects() async {
+    final rows = await _database.select(_database.appProjects).join([
+      innerJoin(
+        _database.kimaiProjects,
+        _database.kimaiProjects.id.equalsExp(
+          _database.appProjects.kimaiProjectId,
+        ),
+      ),
+    ]).get();
+
+    return [
+      for (final row in rows)
+        TimesheetProjectOption(
+          appProjectId: row.readTable(_database.appProjects).id,
+          name: row.readTable(_database.kimaiProjects).name,
+        ),
+    ];
+  }
+
+  Future<List<String>> getAvailableActivities() async {
+    final rows =
+        await (_database.selectOnly(_database.timesheets, distinct: true)
+              ..addColumns([_database.timesheets.activityName])
+              ..where(_database.timesheets.activityName.isNotNull()))
+            .get();
+    final activities = rows
+        .map((row) => row.read(_database.timesheets.activityName))
+        .whereType<String>()
+        .where((value) => value.trim().isNotEmpty)
+        .toList()
+      ..sort();
+
+    return activities;
   }
 
   Stream<TimesheetSummary> watchSummary(DateTime begin, DateTime end) {
@@ -276,6 +389,75 @@ class TimesheetsRepository {
         (sum, item) => sum + (item.amountMinor ?? 0),
       ),
     );
+  }
+
+  JoinedSelectStatement<HasResultSet, dynamic> _timesheetsFilteredQuery(
+    TimesheetFilters filters,
+  ) {
+    final query = _database.select(_database.timesheets).join([
+      leftOuterJoin(
+        _database.appProjects,
+        _database.appProjects.id.equalsExp(_database.timesheets.appProjectId),
+      ),
+      leftOuterJoin(
+        _database.kimaiProjects,
+        _database.kimaiProjects.id.equalsExp(
+          _database.timesheets.kimaiProjectId,
+        ),
+      ),
+    ])
+      ..where(_database.timesheets.beginAt.isBiggerOrEqualValue(filters.begin))
+      ..where(_database.timesheets.beginAt.isSmallerThanValue(filters.end));
+
+    final projectId = filters.appProjectId;
+    if (projectId != null && projectId.isNotEmpty) {
+      query.where(_database.timesheets.appProjectId.equals(projectId));
+    }
+
+    final search = filters.searchText?.trim();
+    if (search != null && search.isNotEmpty) {
+      final escaped = search.replaceAll('%', r'\%').replaceAll('_', r'\_');
+      final pattern = '%$escaped%';
+      query.where(
+        _database.timesheets.activityName.like(pattern) |
+            _database.timesheets.description.like(pattern),
+      );
+    }
+
+    query.orderBy([
+      switch (filters.sortField) {
+        TimesheetSortField.date => OrderingTerm(
+            expression: _database.timesheets.beginAt,
+            mode: filters.sortAscending ? OrderingMode.asc : OrderingMode.desc,
+          ),
+        TimesheetSortField.duration => OrderingTerm(
+            expression: _database.timesheets.durationSeconds,
+            mode: filters.sortAscending ? OrderingMode.asc : OrderingMode.desc,
+          ),
+        TimesheetSortField.amount => OrderingTerm(
+            expression: _database.timesheets.amountMinor,
+            mode: filters.sortAscending ? OrderingMode.asc : OrderingMode.desc,
+          ),
+      },
+    ]);
+
+    return query;
+  }
+
+  List<TimesheetEntry> _mapTimesheetEntries(List<TypedResult> rows) {
+    return [
+      for (final row in rows)
+        TimesheetEntry(
+          timesheet: row.readTable(_database.timesheets),
+          projectName: row.readTableOrNull(_database.kimaiProjects)?.name ??
+              row.readTableOrNull(_database.appProjects)?.name ??
+              'Unknown project',
+          projectColor: row.readTableOrNull(_database.appProjects)?.color ??
+              row.readTableOrNull(_database.kimaiProjects)?.color,
+          hourlyRateMinor:
+              row.readTableOrNull(_database.appProjects)?.hourlyRateMinor,
+        ),
+    ];
   }
 }
 

@@ -5,6 +5,7 @@ abstract final class DateTimeFormats {
   static final time = DateFormat.Hm();
   static final month = DateFormat.yMMMM();
   static final compactDate = DateFormat('yyyy-MM-dd');
+  static final weekday = DateFormat.E();
 }
 
 String formatDurationMinutes(int minutes) {
@@ -20,4 +21,8 @@ String formatDurationMinutes(int minutes) {
   }
 
   return '${hours}h ${rest}m';
+}
+
+String formatDurationSeconds(int seconds) {
+  return formatDurationMinutes((seconds / 60).round());
 }
