@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/db/app_database.dart';
+import '../../../core/network/kimai_url.dart';
 import '../../../core/network/network_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_time_formats.dart';
@@ -76,20 +77,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       controller: _baseUrlController,
                       decoration: const InputDecoration(
                         labelText: 'Base URL',
-                        hintText: 'https://kimai.example.com',
+                        hintText: 'Example: https://kimai.example.com',
+                        helperText: 'Do not include /api manually (optional)',
                       ),
                       validator: (value) {
-                        final raw = value?.trim() ?? '';
-                        final uri = Uri.tryParse(raw);
-                        if (raw.isEmpty ||
-                            uri == null ||
-                            !uri.hasScheme ||
-                            uri.host.isEmpty ||
-                            (uri.scheme != 'http' && uri.scheme != 'https')) {
-                          return 'Enter a valid Kimai URL.';
-                        }
-
-                        return null;
+                        return validateKimaiHostUrl(value ?? '');
                       },
                     ),
                     const SizedBox(height: 12),
@@ -218,7 +210,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     setState(() => _saving = true);
     try {
       final settings = AppSettings(
-        baseUrl: _baseUrlController.text.trim(),
+        baseUrl: normalizeKimaiBaseUrl(_baseUrlController.text),
         currency: _currencyController.text.trim().isEmpty
             ? AppSettings.defaults.currency
             : _currencyController.text.trim().toUpperCase(),

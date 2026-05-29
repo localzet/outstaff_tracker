@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../features/settings/data/settings_repository.dart';
 import '../storage/secure_token_storage.dart';
 import 'kimai_api_client.dart';
+import 'kimai_url.dart';
 
 final dioProvider = Provider<Dio>((ref) {
   return Dio(
@@ -25,6 +26,6 @@ final kimaiApiClientProvider = FutureProvider<KimaiApiClient>((ref) async {
   return KimaiApiClient(
     dio: ref.watch(dioProvider),
     tokenStorage: ref.watch(secureTokenStorageProvider),
-    baseUrl: settings.baseUrl,
+    baseUrl: normalizeKimaiBaseUrl(settings.baseUrl),
   );
 });
