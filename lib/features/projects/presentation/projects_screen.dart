@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
+import '../../../core/db/app_database.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/date_time_formats.dart';
 import '../../../core/widgets/app_screen.dart';
 import '../data/projects_repository.dart';
 
@@ -99,6 +102,7 @@ class _ProjectConfigurationTileState
     final appProject = widget.configuration.appProject;
     final kimaiProject = widget.configuration.kimaiProject;
     final payoutRule = PayoutRule.fromStorage(appProject.payoutRule);
+    final customDates = ref.watch(customPayoutDatesProvider(appProject.id));
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -197,9 +201,10 @@ class _ProjectConfigurationTileState
           Wrap(
             spacing: 8,
             runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               for (final color in ProjectColorDot.palette)
-                IconButton(
+                IconButton.filledTonal(
                   onPressed: () => _update(color: color),
                   icon: ProjectColorDot(color: color),
                   tooltip: color,
@@ -211,8 +216,26 @@ class _ProjectConfigurationTileState
                     ),
                   ),
                 ),
+              Text(
+                appProject.color ?? 'Default color',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
             ],
           ),
+          if (payoutRule == PayoutRule.customDates) ...[
+            const SizedBox(height: 12),
+            customDates.when(
+              data: (items) => CustomPayoutDatesBlock(
+                appProjectId: appProject.id,
+                dates: items,
+              ),
+              loading: () => const LinearProgressIndicator(),
+              error: (error, stackTrace) => Text(
+                error.toString(),
+                style: const TextStyle(color: AppColors.danger),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -234,6 +257,16 @@ class _ProjectConfigurationTileState
         (weeklyGoalText.isNotEmpty && weeklyGoal == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Enter valid positive numbers.')),
+      );
+      return;
+    }
+    if (widget.configuration.appProject.enabled &&
+        (hourlyRate == null || hourlyRate <= 0)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Enabled projects require an hourly rate greater than 0.'),
+        ),
       );
       return;
     }
@@ -263,6 +296,16 @@ class _ProjectConfigurationTileState
     String? color,
     PayoutRule? payoutRule,
   }) {
+    if (enabled == true &&
+        widget.configuration.appProject.hourlyRateMinor == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Set an hourly rate greater than 0 before enabling.'),
+        ),
+      );
+      return Future<void>.value();
+    }
+
     return ref.read(projectsRepositoryProvider).updateProjectSettings(
           appProjectId: widget.configuration.appProject.id,
           enabled: enabled,
@@ -287,6 +330,100 @@ class _ProjectConfigurationTileState
     }
 
     return parsed;
+  }
+}
+
+class CustomPayoutDatesBlock extends ConsumerWidget {
+  const CustomPayoutDatesBlock({
+    required this.appProjectId,
+    required this.dates,
+    super.key,
+  });
+
+  final String appProjectId;
+  final List<PayoutDate> dates;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final moneyFormat = NumberFormat.simpleCurrency(name: 'RUB');
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceElevated,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(AppRadii.sm),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Custom payout dates',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => _addDate(context, ref),
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text('Add'),
+                ),
+              ],
+            ),
+            if (dates.isEmpty)
+              Text(
+                'No custom payout dates configured.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              )
+            else
+              for (final date in dates)
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(DateTimeFormats.date.format(date.payoutDate)),
+                  subtitle: Text(date.note ?? ''),
+                  trailing: Wrap(
+                    spacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      if (date.expectedAmount != null)
+                        Text(moneyFormat.format(date.expectedAmount)),
+                      IconButton(
+                        onPressed: () => ref
+                            .read(projectsRepositoryProvider)
+                            .deleteCustomPayoutDate(date.id),
+                        icon: const Icon(Icons.delete_outline_rounded),
+                        tooltip: 'Delete payout date',
+                      ),
+                    ],
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addDate(BuildContext context, WidgetRef ref) async {
+    final selected = await showDatePicker(
+      context: context,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 3650)),
+      initialDate: DateTime.now(),
+    );
+    if (selected == null) {
+      return;
+    }
+
+    await ref.read(projectsRepositoryProvider).addCustomPayoutDate(
+          appProjectId: appProjectId,
+          input: CustomPayoutDateInput(
+            payoutDate: DateTime(selected.year, selected.month, selected.day),
+          ),
+        );
   }
 }
 

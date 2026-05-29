@@ -45,6 +45,18 @@ class ProjectConfiguration {
   final AppProject appProject;
 }
 
+class CustomPayoutDateInput {
+  const CustomPayoutDateInput({
+    required this.payoutDate,
+    this.expectedAmount,
+    this.note,
+  });
+
+  final DateTime payoutDate;
+  final double? expectedAmount;
+  final String? note;
+}
+
 class ProjectsRepository {
   ProjectsRepository(this._database);
 
@@ -92,6 +104,38 @@ class ProjectsRepository {
       ..where((table) => table.archived.equals(false));
 
     return query.get();
+  }
+
+  Stream<List<PayoutDate>> watchCustomPayoutDates(String appProjectId) {
+    final query = _database.select(_database.payoutDates)
+      ..where((table) => table.appProjectId.equals(appProjectId))
+      ..orderBy([(table) => OrderingTerm.asc(table.payoutDate)]);
+
+    return query.watch();
+  }
+
+  Future<void> addCustomPayoutDate({
+    required String appProjectId,
+    required CustomPayoutDateInput input,
+  }) async {
+    final now = DateTime.now().toUtc();
+    await _database.into(_database.payoutDates).insert(
+          PayoutDatesCompanion.insert(
+            id: 'payout_${now.microsecondsSinceEpoch}',
+            appProjectId: appProjectId,
+            payoutDate: input.payoutDate,
+            expectedAmount: Value(input.expectedAmount),
+            note: Value(input.note),
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+  }
+
+  Future<void> deleteCustomPayoutDate(String id) {
+    return (_database.delete(_database.payoutDates)
+          ..where((table) => table.id.equals(id)))
+        .go();
   }
 
   Future<void> upsertKimaiProjects(List<KimaiProjectDto> projects) async {
@@ -206,6 +250,13 @@ final kimaiProjectsProvider = StreamProvider<List<KimaiProject>>((ref) {
 final projectConfigurationsProvider =
     StreamProvider<List<ProjectConfiguration>>((ref) {
   return ref.watch(projectsRepositoryProvider).watchProjectConfigurations();
+});
+
+final customPayoutDatesProvider =
+    StreamProvider.family<List<PayoutDate>, String>((ref, appProjectId) {
+  return ref.watch(projectsRepositoryProvider).watchCustomPayoutDates(
+        appProjectId,
+      );
 });
 
 String _appProjectId(int kimaiProjectId) => 'kimai_$kimaiProjectId';

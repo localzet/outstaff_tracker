@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_time_formats.dart';
 import '../../../core/widgets/app_screen.dart';
+import '../../analytics/data/analytics_repository.dart';
 import '../../sync/data/sync_controller.dart';
 import '../../timesheets/data/timesheets_repository.dart';
 
@@ -17,9 +18,9 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final summary = ref.watch(currentWeekSummaryProvider);
     final projectSummaries = ref.watch(projectWeekSummariesProvider);
-    final payoutEstimate = ref.watch(nextPayoutEstimateProvider);
+    final payoutForecasts = ref.watch(payoutForecastsProvider);
     final syncState = ref.watch(syncControllerProvider);
-    final currencyFormat = NumberFormat.simpleCurrency();
+    final currencyFormat = NumberFormat.simpleCurrency(name: 'RUB');
 
     return AppScreen(
       title: 'Dashboard',
@@ -119,9 +120,9 @@ class DashboardScreen extends ConsumerWidget {
             message: error.toString(),
           ),
         ),
-        payoutEstimate.when(
-          data: (estimate) {
-            if (estimate == null) {
+        payoutForecasts.when(
+          data: (forecasts) {
+            if (forecasts.isEmpty) {
               return const EmptyState(
                 title: 'No payout rule configured',
                 message:
@@ -129,11 +130,9 @@ class DashboardScreen extends ConsumerWidget {
               );
             }
 
-            return MetricTile(
-              label: 'Next payout estimate',
-              value:
-                  '${currencyFormat.format(estimate.amountMinor / 100)} · ${DateTimeFormats.date.format(estimate.estimatedDate)}',
-              icon: Icons.event_available_rounded,
+            return PayoutForecastCards(
+              forecasts: forecasts,
+              currencyFormat: currencyFormat,
             );
           },
           loading: () => const LinearProgressIndicator(),
@@ -249,5 +248,71 @@ class ProjectProgressCard extends StatelessWidget {
     }
 
     return Color(0xFF000000 | parsed);
+  }
+}
+
+class PayoutForecastCards extends StatelessWidget {
+  const PayoutForecastCards({
+    required this.forecasts,
+    required this.currencyFormat,
+    super.key,
+  });
+
+  final List<PayoutForecast> forecasts;
+  final NumberFormat currencyFormat;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth < 760
+            ? constraints.maxWidth
+            : (constraints.maxWidth - 12) / 2;
+
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            for (final forecast in forecasts.take(4))
+              SizedBox(
+                width: width,
+                child: AppPanel(
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.event_available_rounded,
+                        color: AppColors.textMuted,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              forecast.projectName,
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${DateTimeFormats.date.format(forecast.nextPayoutDate)} · ${forecast.rule}',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        currencyFormat.format(
+                          forecast.unpaidAmountMinor / 100,
+                        ),
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
   }
 }

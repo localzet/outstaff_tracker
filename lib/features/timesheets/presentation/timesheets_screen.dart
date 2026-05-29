@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -134,6 +135,11 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
                 ),
                 tooltip: _sortAscending ? 'Ascending' : 'Descending',
               ),
+              OutlinedButton.icon(
+                onPressed: () => _exportCsv(filters),
+                icon: const Icon(Icons.download_rounded, size: 18),
+                label: const Text('Export CSV'),
+              ),
             ],
           ),
         ),
@@ -203,6 +209,63 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
         selected.end.day,
       ).add(const Duration(days: 1));
     });
+  }
+
+  Future<void> _exportCsv(TimesheetFilters filters) async {
+    final entries = await ref
+        .read(timesheetsRepositoryProvider)
+        .getTimesheetsFiltered(filters);
+    final csv = _buildCsv(entries);
+    await Clipboard.setData(ClipboardData(text: csv));
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('CSV copied to clipboard (${entries.length} rows)'),
+        ),
+      );
+    }
+  }
+
+  String _buildCsv(List<TimesheetEntry> entries) {
+    final rows = <List<String>>[
+      [
+        'date',
+        'project',
+        'activity',
+        'description',
+        'duration_hours',
+        'rate',
+        'amount',
+      ],
+      for (final entry in entries)
+        [
+          entry.timesheet.beginAt.toLocal().toIso8601String(),
+          entry.projectName,
+          entry.timesheet.activityName ?? '',
+          entry.timesheet.description ?? '',
+          (entry.timesheet.durationSeconds / 3600).toStringAsFixed(2),
+          entry.hourlyRateMinor == null
+              ? ''
+              : (entry.hourlyRateMinor! / 100).toStringAsFixed(2),
+          entry.timesheet.amountMinor == null
+              ? ''
+              : (entry.timesheet.amountMinor! / 100).toStringAsFixed(2),
+        ],
+    ];
+
+    return rows.map((row) => row.map(_escapeCsv).join(',')).join('\n');
+  }
+
+  String _escapeCsv(String value) {
+    final escaped = value.replaceAll('"', '""');
+    if (escaped.contains(',') ||
+        escaped.contains('\n') ||
+        escaped.contains('"')) {
+      return '"$escaped"';
+    }
+
+    return escaped;
   }
 }
 
