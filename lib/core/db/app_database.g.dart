@@ -1142,6 +1142,12 @@ class $AppProjectsTable extends AppProjects
   late final GeneratedColumn<double> hourlyRate = GeneratedColumn<double>(
       'hourly_rate', aliasedName, true,
       type: DriftSqlType.double, requiredDuringInsert: false);
+  static const VerificationMeta _hourlyRateMinorMeta =
+      const VerificationMeta('hourlyRateMinor');
+  @override
+  late final GeneratedColumn<int> hourlyRateMinor = GeneratedColumn<int>(
+      'hourly_rate_minor', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
   static const VerificationMeta _weeklyGoalHoursMeta =
       const VerificationMeta('weeklyGoalHours');
   @override
@@ -1194,6 +1200,7 @@ class $AppProjectsTable extends AppProjects
         color,
         enabled,
         hourlyRate,
+        hourlyRateMinor,
         weeklyGoalHours,
         currency,
         payoutRule,
@@ -1241,6 +1248,12 @@ class $AppProjectsTable extends AppProjects
           _hourlyRateMeta,
           hourlyRate.isAcceptableOrUnknown(
               data['hourly_rate']!, _hourlyRateMeta));
+    }
+    if (data.containsKey('hourly_rate_minor')) {
+      context.handle(
+          _hourlyRateMinorMeta,
+          hourlyRateMinor.isAcceptableOrUnknown(
+              data['hourly_rate_minor']!, _hourlyRateMinorMeta));
     }
     if (data.containsKey('weekly_goal_hours')) {
       context.handle(
@@ -1295,6 +1308,8 @@ class $AppProjectsTable extends AppProjects
           .read(DriftSqlType.bool, data['${effectivePrefix}enabled'])!,
       hourlyRate: attachedDatabase.typeMapping
           .read(DriftSqlType.double, data['${effectivePrefix}hourly_rate']),
+      hourlyRateMinor: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}hourly_rate_minor']),
       weeklyGoalHours: attachedDatabase.typeMapping.read(
           DriftSqlType.double, data['${effectivePrefix}weekly_goal_hours']),
       currency: attachedDatabase.typeMapping
@@ -1323,6 +1338,7 @@ class AppProject extends DataClass implements Insertable<AppProject> {
   final String? color;
   final bool enabled;
   final double? hourlyRate;
+  final int? hourlyRateMinor;
   final double? weeklyGoalHours;
   final String currency;
   final String payoutRule;
@@ -1336,6 +1352,7 @@ class AppProject extends DataClass implements Insertable<AppProject> {
       this.color,
       required this.enabled,
       this.hourlyRate,
+      this.hourlyRateMinor,
       this.weeklyGoalHours,
       required this.currency,
       required this.payoutRule,
@@ -1356,6 +1373,9 @@ class AppProject extends DataClass implements Insertable<AppProject> {
     map['enabled'] = Variable<bool>(enabled);
     if (!nullToAbsent || hourlyRate != null) {
       map['hourly_rate'] = Variable<double>(hourlyRate);
+    }
+    if (!nullToAbsent || hourlyRateMinor != null) {
+      map['hourly_rate_minor'] = Variable<int>(hourlyRateMinor);
     }
     if (!nullToAbsent || weeklyGoalHours != null) {
       map['weekly_goal_hours'] = Variable<double>(weeklyGoalHours);
@@ -1381,6 +1401,9 @@ class AppProject extends DataClass implements Insertable<AppProject> {
       hourlyRate: hourlyRate == null && nullToAbsent
           ? const Value.absent()
           : Value(hourlyRate),
+      hourlyRateMinor: hourlyRateMinor == null && nullToAbsent
+          ? const Value.absent()
+          : Value(hourlyRateMinor),
       weeklyGoalHours: weeklyGoalHours == null && nullToAbsent
           ? const Value.absent()
           : Value(weeklyGoalHours),
@@ -1402,6 +1425,7 @@ class AppProject extends DataClass implements Insertable<AppProject> {
       color: serializer.fromJson<String?>(json['color']),
       enabled: serializer.fromJson<bool>(json['enabled']),
       hourlyRate: serializer.fromJson<double?>(json['hourlyRate']),
+      hourlyRateMinor: serializer.fromJson<int?>(json['hourlyRateMinor']),
       weeklyGoalHours: serializer.fromJson<double?>(json['weeklyGoalHours']),
       currency: serializer.fromJson<String>(json['currency']),
       payoutRule: serializer.fromJson<String>(json['payoutRule']),
@@ -1420,6 +1444,7 @@ class AppProject extends DataClass implements Insertable<AppProject> {
       'color': serializer.toJson<String?>(color),
       'enabled': serializer.toJson<bool>(enabled),
       'hourlyRate': serializer.toJson<double?>(hourlyRate),
+      'hourlyRateMinor': serializer.toJson<int?>(hourlyRateMinor),
       'weeklyGoalHours': serializer.toJson<double?>(weeklyGoalHours),
       'currency': serializer.toJson<String>(currency),
       'payoutRule': serializer.toJson<String>(payoutRule),
@@ -1436,6 +1461,7 @@ class AppProject extends DataClass implements Insertable<AppProject> {
           Value<String?> color = const Value.absent(),
           bool? enabled,
           Value<double?> hourlyRate = const Value.absent(),
+          Value<int?> hourlyRateMinor = const Value.absent(),
           Value<double?> weeklyGoalHours = const Value.absent(),
           String? currency,
           String? payoutRule,
@@ -1450,6 +1476,9 @@ class AppProject extends DataClass implements Insertable<AppProject> {
         color: color.present ? color.value : this.color,
         enabled: enabled ?? this.enabled,
         hourlyRate: hourlyRate.present ? hourlyRate.value : this.hourlyRate,
+        hourlyRateMinor: hourlyRateMinor.present
+            ? hourlyRateMinor.value
+            : this.hourlyRateMinor,
         weeklyGoalHours: weeklyGoalHours.present
             ? weeklyGoalHours.value
             : this.weeklyGoalHours,
@@ -1470,6 +1499,9 @@ class AppProject extends DataClass implements Insertable<AppProject> {
       enabled: data.enabled.present ? data.enabled.value : this.enabled,
       hourlyRate:
           data.hourlyRate.present ? data.hourlyRate.value : this.hourlyRate,
+      hourlyRateMinor: data.hourlyRateMinor.present
+          ? data.hourlyRateMinor.value
+          : this.hourlyRateMinor,
       weeklyGoalHours: data.weeklyGoalHours.present
           ? data.weeklyGoalHours.value
           : this.weeklyGoalHours,
@@ -1491,6 +1523,7 @@ class AppProject extends DataClass implements Insertable<AppProject> {
           ..write('color: $color, ')
           ..write('enabled: $enabled, ')
           ..write('hourlyRate: $hourlyRate, ')
+          ..write('hourlyRateMinor: $hourlyRateMinor, ')
           ..write('weeklyGoalHours: $weeklyGoalHours, ')
           ..write('currency: $currency, ')
           ..write('payoutRule: $payoutRule, ')
@@ -1509,6 +1542,7 @@ class AppProject extends DataClass implements Insertable<AppProject> {
       color,
       enabled,
       hourlyRate,
+      hourlyRateMinor,
       weeklyGoalHours,
       currency,
       payoutRule,
@@ -1525,6 +1559,7 @@ class AppProject extends DataClass implements Insertable<AppProject> {
           other.color == this.color &&
           other.enabled == this.enabled &&
           other.hourlyRate == this.hourlyRate &&
+          other.hourlyRateMinor == this.hourlyRateMinor &&
           other.weeklyGoalHours == this.weeklyGoalHours &&
           other.currency == this.currency &&
           other.payoutRule == this.payoutRule &&
@@ -1540,6 +1575,7 @@ class AppProjectsCompanion extends UpdateCompanion<AppProject> {
   final Value<String?> color;
   final Value<bool> enabled;
   final Value<double?> hourlyRate;
+  final Value<int?> hourlyRateMinor;
   final Value<double?> weeklyGoalHours;
   final Value<String> currency;
   final Value<String> payoutRule;
@@ -1554,6 +1590,7 @@ class AppProjectsCompanion extends UpdateCompanion<AppProject> {
     this.color = const Value.absent(),
     this.enabled = const Value.absent(),
     this.hourlyRate = const Value.absent(),
+    this.hourlyRateMinor = const Value.absent(),
     this.weeklyGoalHours = const Value.absent(),
     this.currency = const Value.absent(),
     this.payoutRule = const Value.absent(),
@@ -1569,6 +1606,7 @@ class AppProjectsCompanion extends UpdateCompanion<AppProject> {
     this.color = const Value.absent(),
     this.enabled = const Value.absent(),
     this.hourlyRate = const Value.absent(),
+    this.hourlyRateMinor = const Value.absent(),
     this.weeklyGoalHours = const Value.absent(),
     this.currency = const Value.absent(),
     this.payoutRule = const Value.absent(),
@@ -1587,6 +1625,7 @@ class AppProjectsCompanion extends UpdateCompanion<AppProject> {
     Expression<String>? color,
     Expression<bool>? enabled,
     Expression<double>? hourlyRate,
+    Expression<int>? hourlyRateMinor,
     Expression<double>? weeklyGoalHours,
     Expression<String>? currency,
     Expression<String>? payoutRule,
@@ -1602,6 +1641,7 @@ class AppProjectsCompanion extends UpdateCompanion<AppProject> {
       if (color != null) 'color': color,
       if (enabled != null) 'enabled': enabled,
       if (hourlyRate != null) 'hourly_rate': hourlyRate,
+      if (hourlyRateMinor != null) 'hourly_rate_minor': hourlyRateMinor,
       if (weeklyGoalHours != null) 'weekly_goal_hours': weeklyGoalHours,
       if (currency != null) 'currency': currency,
       if (payoutRule != null) 'payout_rule': payoutRule,
@@ -1619,6 +1659,7 @@ class AppProjectsCompanion extends UpdateCompanion<AppProject> {
       Value<String?>? color,
       Value<bool>? enabled,
       Value<double?>? hourlyRate,
+      Value<int?>? hourlyRateMinor,
       Value<double?>? weeklyGoalHours,
       Value<String>? currency,
       Value<String>? payoutRule,
@@ -1633,6 +1674,7 @@ class AppProjectsCompanion extends UpdateCompanion<AppProject> {
       color: color ?? this.color,
       enabled: enabled ?? this.enabled,
       hourlyRate: hourlyRate ?? this.hourlyRate,
+      hourlyRateMinor: hourlyRateMinor ?? this.hourlyRateMinor,
       weeklyGoalHours: weeklyGoalHours ?? this.weeklyGoalHours,
       currency: currency ?? this.currency,
       payoutRule: payoutRule ?? this.payoutRule,
@@ -1663,6 +1705,9 @@ class AppProjectsCompanion extends UpdateCompanion<AppProject> {
     }
     if (hourlyRate.present) {
       map['hourly_rate'] = Variable<double>(hourlyRate.value);
+    }
+    if (hourlyRateMinor.present) {
+      map['hourly_rate_minor'] = Variable<int>(hourlyRateMinor.value);
     }
     if (weeklyGoalHours.present) {
       map['weekly_goal_hours'] = Variable<double>(weeklyGoalHours.value);
@@ -1697,6 +1742,7 @@ class AppProjectsCompanion extends UpdateCompanion<AppProject> {
           ..write('color: $color, ')
           ..write('enabled: $enabled, ')
           ..write('hourlyRate: $hourlyRate, ')
+          ..write('hourlyRateMinor: $hourlyRateMinor, ')
           ..write('weeklyGoalHours: $weeklyGoalHours, ')
           ..write('currency: $currency, ')
           ..write('payoutRule: $payoutRule, ')
@@ -2213,6 +2259,12 @@ class $TimesheetsTable extends Timesheets
   late final GeneratedColumn<double> rate = GeneratedColumn<double>(
       'rate', aliasedName, true,
       type: DriftSqlType.double, requiredDuringInsert: false);
+  static const VerificationMeta _amountMinorMeta =
+      const VerificationMeta('amountMinor');
+  @override
+  late final GeneratedColumn<int> amountMinor = GeneratedColumn<int>(
+      'amount_minor', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
   static const VerificationMeta _currencyMeta =
       const VerificationMeta('currency');
   @override
@@ -2257,6 +2309,7 @@ class $TimesheetsTable extends Timesheets
         endAt,
         durationSeconds,
         rate,
+        amountMinor,
         currency,
         exported,
         tags,
@@ -2320,6 +2373,12 @@ class $TimesheetsTable extends Timesheets
       context.handle(
           _rateMeta, rate.isAcceptableOrUnknown(data['rate']!, _rateMeta));
     }
+    if (data.containsKey('amount_minor')) {
+      context.handle(
+          _amountMinorMeta,
+          amountMinor.isAcceptableOrUnknown(
+              data['amount_minor']!, _amountMinorMeta));
+    }
     if (data.containsKey('currency')) {
       context.handle(_currencyMeta,
           currency.isAcceptableOrUnknown(data['currency']!, _currencyMeta));
@@ -2371,6 +2430,8 @@ class $TimesheetsTable extends Timesheets
           .read(DriftSqlType.int, data['${effectivePrefix}duration_seconds'])!,
       rate: attachedDatabase.typeMapping
           .read(DriftSqlType.double, data['${effectivePrefix}rate']),
+      amountMinor: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}amount_minor']),
       currency: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}currency']),
       exported: attachedDatabase.typeMapping
@@ -2400,6 +2461,7 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
   final DateTime? endAt;
   final int durationSeconds;
   final double? rate;
+  final int? amountMinor;
   final String? currency;
   final bool exported;
   final String? tags;
@@ -2415,6 +2477,7 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
       this.endAt,
       required this.durationSeconds,
       this.rate,
+      this.amountMinor,
       this.currency,
       required this.exported,
       this.tags,
@@ -2443,6 +2506,9 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
     map['duration_seconds'] = Variable<int>(durationSeconds);
     if (!nullToAbsent || rate != null) {
       map['rate'] = Variable<double>(rate);
+    }
+    if (!nullToAbsent || amountMinor != null) {
+      map['amount_minor'] = Variable<int>(amountMinor);
     }
     if (!nullToAbsent || currency != null) {
       map['currency'] = Variable<String>(currency);
@@ -2478,6 +2544,9 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
           endAt == null && nullToAbsent ? const Value.absent() : Value(endAt),
       durationSeconds: Value(durationSeconds),
       rate: rate == null && nullToAbsent ? const Value.absent() : Value(rate),
+      amountMinor: amountMinor == null && nullToAbsent
+          ? const Value.absent()
+          : Value(amountMinor),
       currency: currency == null && nullToAbsent
           ? const Value.absent()
           : Value(currency),
@@ -2503,6 +2572,7 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
       endAt: serializer.fromJson<DateTime?>(json['endAt']),
       durationSeconds: serializer.fromJson<int>(json['durationSeconds']),
       rate: serializer.fromJson<double?>(json['rate']),
+      amountMinor: serializer.fromJson<int?>(json['amountMinor']),
       currency: serializer.fromJson<String?>(json['currency']),
       exported: serializer.fromJson<bool>(json['exported']),
       tags: serializer.fromJson<String?>(json['tags']),
@@ -2523,6 +2593,7 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
       'endAt': serializer.toJson<DateTime?>(endAt),
       'durationSeconds': serializer.toJson<int>(durationSeconds),
       'rate': serializer.toJson<double?>(rate),
+      'amountMinor': serializer.toJson<int?>(amountMinor),
       'currency': serializer.toJson<String?>(currency),
       'exported': serializer.toJson<bool>(exported),
       'tags': serializer.toJson<String?>(tags),
@@ -2541,6 +2612,7 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
           Value<DateTime?> endAt = const Value.absent(),
           int? durationSeconds,
           Value<double?> rate = const Value.absent(),
+          Value<int?> amountMinor = const Value.absent(),
           Value<String?> currency = const Value.absent(),
           bool? exported,
           Value<String?> tags = const Value.absent(),
@@ -2559,6 +2631,7 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
         endAt: endAt.present ? endAt.value : this.endAt,
         durationSeconds: durationSeconds ?? this.durationSeconds,
         rate: rate.present ? rate.value : this.rate,
+        amountMinor: amountMinor.present ? amountMinor.value : this.amountMinor,
         currency: currency.present ? currency.value : this.currency,
         exported: exported ?? this.exported,
         tags: tags.present ? tags.value : this.tags,
@@ -2586,6 +2659,8 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
           ? data.durationSeconds.value
           : this.durationSeconds,
       rate: data.rate.present ? data.rate.value : this.rate,
+      amountMinor:
+          data.amountMinor.present ? data.amountMinor.value : this.amountMinor,
       currency: data.currency.present ? data.currency.value : this.currency,
       exported: data.exported.present ? data.exported.value : this.exported,
       tags: data.tags.present ? data.tags.value : this.tags,
@@ -2608,6 +2683,7 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
           ..write('endAt: $endAt, ')
           ..write('durationSeconds: $durationSeconds, ')
           ..write('rate: $rate, ')
+          ..write('amountMinor: $amountMinor, ')
           ..write('currency: $currency, ')
           ..write('exported: $exported, ')
           ..write('tags: $tags, ')
@@ -2628,6 +2704,7 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
       endAt,
       durationSeconds,
       rate,
+      amountMinor,
       currency,
       exported,
       tags,
@@ -2646,6 +2723,7 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
           other.endAt == this.endAt &&
           other.durationSeconds == this.durationSeconds &&
           other.rate == this.rate &&
+          other.amountMinor == this.amountMinor &&
           other.currency == this.currency &&
           other.exported == this.exported &&
           other.tags == this.tags &&
@@ -2663,6 +2741,7 @@ class TimesheetsCompanion extends UpdateCompanion<Timesheet> {
   final Value<DateTime?> endAt;
   final Value<int> durationSeconds;
   final Value<double?> rate;
+  final Value<int?> amountMinor;
   final Value<String?> currency;
   final Value<bool> exported;
   final Value<String?> tags;
@@ -2678,6 +2757,7 @@ class TimesheetsCompanion extends UpdateCompanion<Timesheet> {
     this.endAt = const Value.absent(),
     this.durationSeconds = const Value.absent(),
     this.rate = const Value.absent(),
+    this.amountMinor = const Value.absent(),
     this.currency = const Value.absent(),
     this.exported = const Value.absent(),
     this.tags = const Value.absent(),
@@ -2694,6 +2774,7 @@ class TimesheetsCompanion extends UpdateCompanion<Timesheet> {
     this.endAt = const Value.absent(),
     this.durationSeconds = const Value.absent(),
     this.rate = const Value.absent(),
+    this.amountMinor = const Value.absent(),
     this.currency = const Value.absent(),
     this.exported = const Value.absent(),
     this.tags = const Value.absent(),
@@ -2711,6 +2792,7 @@ class TimesheetsCompanion extends UpdateCompanion<Timesheet> {
     Expression<DateTime>? endAt,
     Expression<int>? durationSeconds,
     Expression<double>? rate,
+    Expression<int>? amountMinor,
     Expression<String>? currency,
     Expression<bool>? exported,
     Expression<String>? tags,
@@ -2727,6 +2809,7 @@ class TimesheetsCompanion extends UpdateCompanion<Timesheet> {
       if (endAt != null) 'end_at': endAt,
       if (durationSeconds != null) 'duration_seconds': durationSeconds,
       if (rate != null) 'rate': rate,
+      if (amountMinor != null) 'amount_minor': amountMinor,
       if (currency != null) 'currency': currency,
       if (exported != null) 'exported': exported,
       if (tags != null) 'tags': tags,
@@ -2745,6 +2828,7 @@ class TimesheetsCompanion extends UpdateCompanion<Timesheet> {
       Value<DateTime?>? endAt,
       Value<int>? durationSeconds,
       Value<double?>? rate,
+      Value<int?>? amountMinor,
       Value<String?>? currency,
       Value<bool>? exported,
       Value<String?>? tags,
@@ -2760,6 +2844,7 @@ class TimesheetsCompanion extends UpdateCompanion<Timesheet> {
       endAt: endAt ?? this.endAt,
       durationSeconds: durationSeconds ?? this.durationSeconds,
       rate: rate ?? this.rate,
+      amountMinor: amountMinor ?? this.amountMinor,
       currency: currency ?? this.currency,
       exported: exported ?? this.exported,
       tags: tags ?? this.tags,
@@ -2798,6 +2883,9 @@ class TimesheetsCompanion extends UpdateCompanion<Timesheet> {
     if (rate.present) {
       map['rate'] = Variable<double>(rate.value);
     }
+    if (amountMinor.present) {
+      map['amount_minor'] = Variable<int>(amountMinor.value);
+    }
     if (currency.present) {
       map['currency'] = Variable<String>(currency.value);
     }
@@ -2828,6 +2916,7 @@ class TimesheetsCompanion extends UpdateCompanion<Timesheet> {
           ..write('endAt: $endAt, ')
           ..write('durationSeconds: $durationSeconds, ')
           ..write('rate: $rate, ')
+          ..write('amountMinor: $amountMinor, ')
           ..write('currency: $currency, ')
           ..write('exported: $exported, ')
           ..write('tags: $tags, ')
@@ -3951,6 +4040,7 @@ typedef $$AppProjectsTableCreateCompanionBuilder = AppProjectsCompanion
   Value<String?> color,
   Value<bool> enabled,
   Value<double?> hourlyRate,
+  Value<int?> hourlyRateMinor,
   Value<double?> weeklyGoalHours,
   Value<String> currency,
   Value<String> payoutRule,
@@ -3967,6 +4057,7 @@ typedef $$AppProjectsTableUpdateCompanionBuilder = AppProjectsCompanion
   Value<String?> color,
   Value<bool> enabled,
   Value<double?> hourlyRate,
+  Value<int?> hourlyRateMinor,
   Value<double?> weeklyGoalHours,
   Value<String> currency,
   Value<String> payoutRule,
@@ -4050,6 +4141,10 @@ class $$AppProjectsTableFilterComposer
 
   ColumnFilters<double> get hourlyRate => $composableBuilder(
       column: $table.hourlyRate, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get hourlyRateMinor => $composableBuilder(
+      column: $table.hourlyRateMinor,
+      builder: (column) => ColumnFilters(column));
 
   ColumnFilters<double> get weeklyGoalHours => $composableBuilder(
       column: $table.weeklyGoalHours,
@@ -4157,6 +4252,10 @@ class $$AppProjectsTableOrderingComposer
   ColumnOrderings<double> get hourlyRate => $composableBuilder(
       column: $table.hourlyRate, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<int> get hourlyRateMinor => $composableBuilder(
+      column: $table.hourlyRateMinor,
+      builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<double> get weeklyGoalHours => $composableBuilder(
       column: $table.weeklyGoalHours,
       builder: (column) => ColumnOrderings(column));
@@ -4220,6 +4319,9 @@ class $$AppProjectsTableAnnotationComposer
 
   GeneratedColumn<double> get hourlyRate => $composableBuilder(
       column: $table.hourlyRate, builder: (column) => column);
+
+  GeneratedColumn<int> get hourlyRateMinor => $composableBuilder(
+      column: $table.hourlyRateMinor, builder: (column) => column);
 
   GeneratedColumn<double> get weeklyGoalHours => $composableBuilder(
       column: $table.weeklyGoalHours, builder: (column) => column);
@@ -4332,6 +4434,7 @@ class $$AppProjectsTableTableManager extends RootTableManager<
             Value<String?> color = const Value.absent(),
             Value<bool> enabled = const Value.absent(),
             Value<double?> hourlyRate = const Value.absent(),
+            Value<int?> hourlyRateMinor = const Value.absent(),
             Value<double?> weeklyGoalHours = const Value.absent(),
             Value<String> currency = const Value.absent(),
             Value<String> payoutRule = const Value.absent(),
@@ -4347,6 +4450,7 @@ class $$AppProjectsTableTableManager extends RootTableManager<
             color: color,
             enabled: enabled,
             hourlyRate: hourlyRate,
+            hourlyRateMinor: hourlyRateMinor,
             weeklyGoalHours: weeklyGoalHours,
             currency: currency,
             payoutRule: payoutRule,
@@ -4362,6 +4466,7 @@ class $$AppProjectsTableTableManager extends RootTableManager<
             Value<String?> color = const Value.absent(),
             Value<bool> enabled = const Value.absent(),
             Value<double?> hourlyRate = const Value.absent(),
+            Value<int?> hourlyRateMinor = const Value.absent(),
             Value<double?> weeklyGoalHours = const Value.absent(),
             Value<String> currency = const Value.absent(),
             Value<String> payoutRule = const Value.absent(),
@@ -4377,6 +4482,7 @@ class $$AppProjectsTableTableManager extends RootTableManager<
             color: color,
             enabled: enabled,
             hourlyRate: hourlyRate,
+            hourlyRateMinor: hourlyRateMinor,
             weeklyGoalHours: weeklyGoalHours,
             currency: currency,
             payoutRule: payoutRule,
@@ -4808,6 +4914,7 @@ typedef $$TimesheetsTableCreateCompanionBuilder = TimesheetsCompanion Function({
   Value<DateTime?> endAt,
   Value<int> durationSeconds,
   Value<double?> rate,
+  Value<int?> amountMinor,
   Value<String?> currency,
   Value<bool> exported,
   Value<String?> tags,
@@ -4824,6 +4931,7 @@ typedef $$TimesheetsTableUpdateCompanionBuilder = TimesheetsCompanion Function({
   Value<DateTime?> endAt,
   Value<int> durationSeconds,
   Value<double?> rate,
+  Value<int?> amountMinor,
   Value<String?> currency,
   Value<bool> exported,
   Value<String?> tags,
@@ -4896,6 +5004,9 @@ class $$TimesheetsTableFilterComposer
 
   ColumnFilters<double> get rate => $composableBuilder(
       column: $table.rate, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get amountMinor => $composableBuilder(
+      column: $table.amountMinor, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<String> get currency => $composableBuilder(
       column: $table.currency, builder: (column) => ColumnFilters(column));
@@ -4986,6 +5097,9 @@ class $$TimesheetsTableOrderingComposer
   ColumnOrderings<double> get rate => $composableBuilder(
       column: $table.rate, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<int> get amountMinor => $composableBuilder(
+      column: $table.amountMinor, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<String> get currency => $composableBuilder(
       column: $table.currency, builder: (column) => ColumnOrderings(column));
 
@@ -5072,6 +5186,9 @@ class $$TimesheetsTableAnnotationComposer
 
   GeneratedColumn<double> get rate =>
       $composableBuilder(column: $table.rate, builder: (column) => column);
+
+  GeneratedColumn<int> get amountMinor => $composableBuilder(
+      column: $table.amountMinor, builder: (column) => column);
 
   GeneratedColumn<String> get currency =>
       $composableBuilder(column: $table.currency, builder: (column) => column);
@@ -5161,6 +5278,7 @@ class $$TimesheetsTableTableManager extends RootTableManager<
             Value<DateTime?> endAt = const Value.absent(),
             Value<int> durationSeconds = const Value.absent(),
             Value<double?> rate = const Value.absent(),
+            Value<int?> amountMinor = const Value.absent(),
             Value<String?> currency = const Value.absent(),
             Value<bool> exported = const Value.absent(),
             Value<String?> tags = const Value.absent(),
@@ -5177,6 +5295,7 @@ class $$TimesheetsTableTableManager extends RootTableManager<
             endAt: endAt,
             durationSeconds: durationSeconds,
             rate: rate,
+            amountMinor: amountMinor,
             currency: currency,
             exported: exported,
             tags: tags,
@@ -5193,6 +5312,7 @@ class $$TimesheetsTableTableManager extends RootTableManager<
             Value<DateTime?> endAt = const Value.absent(),
             Value<int> durationSeconds = const Value.absent(),
             Value<double?> rate = const Value.absent(),
+            Value<int?> amountMinor = const Value.absent(),
             Value<String?> currency = const Value.absent(),
             Value<bool> exported = const Value.absent(),
             Value<String?> tags = const Value.absent(),
@@ -5209,6 +5329,7 @@ class $$TimesheetsTableTableManager extends RootTableManager<
             endAt: endAt,
             durationSeconds: durationSeconds,
             rate: rate,
+            amountMinor: amountMinor,
             currency: currency,
             exported: exported,
             tags: tags,

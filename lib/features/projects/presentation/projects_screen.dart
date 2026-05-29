@@ -240,6 +240,7 @@ class _ProjectConfigurationTileState
 
     await _update(
       hourlyRate: hourlyRate,
+      hourlyRateMinor: hourlyRate == null ? null : (hourlyRate * 100).round(),
       clearHourlyRate: hourlyRateText.isEmpty,
       weeklyGoalHours: weeklyGoal,
       clearWeeklyGoalHours: weeklyGoalText.isEmpty,
@@ -255,6 +256,7 @@ class _ProjectConfigurationTileState
   Future<void> _update({
     bool? enabled,
     double? hourlyRate,
+    int? hourlyRateMinor,
     bool clearHourlyRate = false,
     double? weeklyGoalHours,
     bool clearWeeklyGoalHours = false,
@@ -265,6 +267,7 @@ class _ProjectConfigurationTileState
           appProjectId: widget.configuration.appProject.id,
           enabled: enabled,
           hourlyRate: hourlyRate,
+          hourlyRateMinor: hourlyRateMinor,
           clearHourlyRate: clearHourlyRate,
           weeklyGoalHours: weeklyGoalHours,
           clearWeeklyGoalHours: clearWeeklyGoalHours,

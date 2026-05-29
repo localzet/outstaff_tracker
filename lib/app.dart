@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +10,7 @@ import 'features/calendar/presentation/calendar_screen.dart';
 import 'features/dashboard/presentation/dashboard_screen.dart';
 import 'features/projects/presentation/projects_screen.dart';
 import 'features/settings/presentation/settings_screen.dart';
+import 'features/sync/data/sync_controller.dart';
 import 'features/timesheets/presentation/timesheets_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -62,7 +65,44 @@ class OutstaffTrackerApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
       routerConfig: router,
+      builder: (context, child) => AutoSyncHost(child: child),
     );
+  }
+}
+
+class AutoSyncHost extends ConsumerStatefulWidget {
+  const AutoSyncHost({required this.child, super.key});
+
+  final Widget? child;
+
+  @override
+  ConsumerState<AutoSyncHost> createState() => _AutoSyncHostState();
+}
+
+class _AutoSyncHostState extends ConsumerState<AutoSyncHost> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(minutes: 10), (_) {
+      final controller = ref.read(syncControllerProvider.notifier);
+      final state = ref.read(syncControllerProvider);
+      if (!state.isSyncing) {
+        unawaited(controller.runIncrementalSync().catchError((_) {}));
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.child ?? const SizedBox.shrink();
   }
 }
 

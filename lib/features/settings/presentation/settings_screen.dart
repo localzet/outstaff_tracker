@@ -6,9 +6,11 @@ import 'package:go_router/go_router.dart';
 import '../../../core/db/app_database.dart';
 import '../../../core/network/network_providers.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/date_time_formats.dart';
 import '../../../core/widgets/app_screen.dart';
 import '../../projects/data/projects_repository.dart';
 import '../../projects/presentation/projects_screen.dart';
+import '../../sync/data/sync_controller.dart';
 import '../../sync/data/sync_repository.dart';
 import '../data/app_settings.dart';
 import '../data/settings_repository.dart';
@@ -46,6 +48,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final settings = ref.watch(appSettingsProvider);
     final latestSyncLog = ref.watch(latestSyncLogProvider);
+    final syncState = ref.watch(syncControllerProvider);
 
     return AppScreen(
       title: 'Settings',
@@ -145,8 +148,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ),
                           label: const Text('Connect'),
                         ),
+                        OutlinedButton.icon(
+                          onPressed: syncState.isSyncing
+                              ? null
+                              : _runFullTimesheetSync,
+                          icon: const Icon(Icons.history_rounded, size: 18),
+                          label: Text(
+                            syncState.isSyncing ? 'Syncing' : 'Sync last year',
+                          ),
+                        ),
                       ],
                     ),
+                    if (syncState.lastError != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        syncState.lastError!,
+                        style: const TextStyle(color: AppColors.danger),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -160,7 +179,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         ConnectionStatusBlock(status: _connectionStatus),
         latestSyncLog.when(
-          data: (log) => LastSyncStatusBlock(log: log),
+          data: (log) => LastSyncStatusBlock(
+            log: log,
+            lastFullSyncAt: syncState.lastFullSyncAt,
+            lastIncrementalSyncAt: syncState.lastIncrementalSyncAt,
+          ),
           loading: () => const LinearProgressIndicator(),
           error: (error, stackTrace) => EmptyState(
             title: 'Last sync status is unavailable',
@@ -295,6 +318,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     return 'Connection failed: $error';
   }
+
+  Future<void> _runFullTimesheetSync() async {
+    try {
+      await ref.read(syncControllerProvider.notifier).runFullSync();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Last year sync completed')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Sync failed: $error')),
+        );
+      }
+    }
+  }
 }
 
 class ConnectionStatus {
@@ -378,9 +418,16 @@ class ConnectionStatusBlock extends StatelessWidget {
 }
 
 class LastSyncStatusBlock extends StatelessWidget {
-  const LastSyncStatusBlock({required this.log, super.key});
+  const LastSyncStatusBlock({
+    required this.log,
+    required this.lastFullSyncAt,
+    required this.lastIncrementalSyncAt,
+    super.key,
+  });
 
   final SyncLog? log;
+  final DateTime? lastFullSyncAt;
+  final DateTime? lastIncrementalSyncAt;
 
   @override
   Widget build(BuildContext context) {
@@ -411,11 +458,28 @@ class LastSyncStatusBlock extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(message, style: Theme.of(context).textTheme.bodyMedium),
+                const SizedBox(height: 8),
+                Text(
+                  'Full: ${_formatSyncDate(lastFullSyncAt)}',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                Text(
+                  'Incremental: ${_formatSyncDate(lastIncrementalSyncAt)}',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
               ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  String _formatSyncDate(DateTime? value) {
+    if (value == null) {
+      return 'Never';
+    }
+
+    return '${DateTimeFormats.date.format(value)} ${DateTimeFormats.time.format(value)}';
   }
 }

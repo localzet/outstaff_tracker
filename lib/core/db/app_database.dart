@@ -50,6 +50,7 @@ class AppProjects extends Table {
   TextColumn get color => text().nullable()();
   BoolColumn get enabled => boolean().withDefault(const Constant(true))();
   RealColumn get hourlyRate => real().nullable()();
+  IntColumn get hourlyRateMinor => integer().nullable()();
   RealColumn get weeklyGoalHours => real().nullable()();
   TextColumn get currency => text().withDefault(const Constant('USD'))();
   TextColumn get payoutRule => text().withDefault(const Constant('none'))();
@@ -89,6 +90,7 @@ class Timesheets extends Table {
   DateTimeColumn get endAt => dateTime().nullable()();
   IntColumn get durationSeconds => integer().withDefault(const Constant(0))();
   RealColumn get rate => real().nullable()();
+  IntColumn get amountMinor => integer().nullable()();
   TextColumn get currency => text().nullable()();
   BoolColumn get exported => boolean().withDefault(const Constant(false))();
   TextColumn get tags => text().nullable()();
@@ -137,7 +139,7 @@ class AppDatabase extends _$AppDatabase {
         );
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -147,6 +149,10 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(appProjects, appProjects.enabled);
             await m.addColumn(appProjects, appProjects.weeklyGoalHours);
             await m.addColumn(appProjects, appProjects.payoutRule);
+          }
+          if (from < 3) {
+            await m.addColumn(appProjects, appProjects.hourlyRateMinor);
+            await m.addColumn(timesheets, timesheets.amountMinor);
           }
         },
       );

@@ -85,6 +85,15 @@ class ProjectsRepository {
         );
   }
 
+  Future<List<AppProject>> getEnabledKimaiAppProjects() {
+    final query = _database.select(_database.appProjects)
+      ..where((table) => table.enabled.equals(true))
+      ..where((table) => table.kimaiProjectId.isNotNull())
+      ..where((table) => table.archived.equals(false));
+
+    return query.get();
+  }
+
   Future<void> upsertKimaiProjects(List<KimaiProjectDto> projects) async {
     final now = DateTime.now().toUtc();
 
@@ -147,6 +156,7 @@ class ProjectsRepository {
     required String appProjectId,
     bool? enabled,
     double? hourlyRate,
+    int? hourlyRateMinor,
     bool clearHourlyRate = false,
     double? weeklyGoalHours,
     bool clearWeeklyGoalHours = false,
@@ -165,6 +175,11 @@ class ProjectsRepository {
             : hourlyRate == null
                 ? const Value.absent()
                 : Value(hourlyRate),
+        hourlyRateMinor: clearHourlyRate
+            ? const Value<int?>(null)
+            : hourlyRateMinor == null
+                ? const Value.absent()
+                : Value(hourlyRateMinor),
         weeklyGoalHours: clearWeeklyGoalHours
             ? const Value<double?>(null)
             : weeklyGoalHours == null

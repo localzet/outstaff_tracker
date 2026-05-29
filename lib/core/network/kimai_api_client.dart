@@ -42,23 +42,47 @@ class KimaiApiClient {
 
   Future<List<KimaiTimesheetDto>> fetchTimesheets(
     DateTime begin,
-    DateTime end,
-  ) async {
-    final response = await _request<List<dynamic>>(
-      path: '/api/timesheets',
-      method: 'GET',
-      queryParameters: {
-        // TODO: Confirm date filter names against the target Kimai version.
-        'begin': begin.toUtc().toIso8601String(),
-        'end': end.toUtc().toIso8601String(),
-      },
-    );
+    DateTime end, {
+    int? projectId,
+  }) async {
+    const pageSize = 200;
+    var page = 1;
+    final result = <KimaiTimesheetDto>[];
 
-    final data = response.data ?? const [];
-    return data
-        .whereType<Map<String, Object?>>()
-        .map(KimaiTimesheetDto.fromJson)
-        .toList(growable: false);
+    while (true) {
+      final response = await _request<Object?>(
+        path: '/api/timesheets',
+        method: 'GET',
+        queryParameters: {
+          // TODO: Confirm date filter names against the target Kimai version.
+          'begin': begin.toUtc().toIso8601String(),
+          'end': end.toUtc().toIso8601String(),
+          // TODO: Confirm pagination and project filter names for the target Kimai version.
+          'page': page,
+          'size': pageSize,
+          if (projectId != null) 'project': projectId,
+        },
+      );
+
+      final pageItems = _readResponseList(response.data)
+          .whereType<Map<String, Object?>>()
+          .map(KimaiTimesheetDto.fromJson)
+          .toList(growable: false);
+      result.addAll(pageItems);
+
+      final totalHeader = response.headers.value('x-total-count');
+      final total = totalHeader == null ? null : int.tryParse(totalHeader);
+      final hasHeaderNext = total != null && result.length < total;
+      final hasImplicitNext = total == null && pageItems.length == pageSize;
+
+      if (!hasHeaderNext && !hasImplicitNext) {
+        break;
+      }
+
+      page += 1;
+    }
+
+    return result;
   }
 
   Future<Response<T>> _request<T>({
@@ -86,6 +110,23 @@ class KimaiApiClient {
       queryParameters: queryParameters,
     );
   }
+}
+
+List<Object?> _readResponseList(Object? data) {
+  if (data is List) {
+    return data;
+  }
+
+  if (data is Map<String, Object?>) {
+    for (final key in const ['data', 'items', 'results']) {
+      final value = data[key];
+      if (value is List) {
+        return value;
+      }
+    }
+  }
+
+  return const [];
 }
 
 class KimaiAuthenticationException implements Exception {
