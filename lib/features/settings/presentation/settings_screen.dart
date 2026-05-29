@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -178,6 +181,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
         ConnectionStatusBlock(status: _connectionStatus),
+        SyncProgressBlock(syncState: syncState),
+        const DataSafetyPanel(),
         latestSyncLog.when(
           data: (log) => LastSyncStatusBlock(
             log: log,
@@ -334,6 +339,163 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         );
       }
     }
+  }
+}
+
+class SyncProgressBlock extends StatelessWidget {
+  const SyncProgressBlock({required this.syncState, super.key});
+
+  final SyncControllerState syncState;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!syncState.isSyncing && syncState.lastError == null) {
+      return const SizedBox.shrink();
+    }
+
+    final total = syncState.totalProjects;
+    final completed = syncState.completedProjects;
+    return AppPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Sync progress', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          if (syncState.isSyncing) ...[
+            LinearProgressIndicator(
+              value: total <= 0 ? null : completed / total,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${syncState.currentProject ?? 'Preparing'} · $completed/$total projects',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ],
+          if (syncState.lastError != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              syncState.lastError!,
+              style: const TextStyle(color: AppColors.warning),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class DataSafetyPanel extends ConsumerWidget {
+  const DataSafetyPanel({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return AppPanel(
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text('Data safety', style: Theme.of(context).textTheme.titleMedium),
+          OutlinedButton.icon(
+            onPressed: () => _exportBackup(context, ref),
+            icon: const Icon(Icons.ios_share_rounded, size: 18),
+            label: const Text('Export settings JSON'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => _importBackup(context, ref),
+            icon: const Icon(Icons.file_download_rounded, size: 18),
+            label: const Text('Import settings JSON'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => _clearSettings(context, ref),
+            icon: const Icon(Icons.delete_outline_rounded, size: 18),
+            label: const Text('Clear settings/token'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _exportBackup(BuildContext context, WidgetRef ref) async {
+    final backup =
+        await ref.read(settingsRepositoryProvider).exportSettingsBackup();
+    await Clipboard.setData(
+      ClipboardData(
+        text: const JsonEncoder.withIndent('  ').convert(backup),
+      ),
+    );
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Settings backup copied')),
+      );
+    }
+  }
+
+  Future<void> _importBackup(BuildContext context, WidgetRef ref) async {
+    final controller = TextEditingController();
+    final jsonText = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Import settings backup'),
+        content: TextField(
+          controller: controller,
+          maxLines: 8,
+          decoration: const InputDecoration(labelText: 'JSON'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('Import'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (jsonText == null || jsonText.trim().isEmpty) {
+      return;
+    }
+
+    final decoded = jsonDecode(jsonText);
+    if (decoded is! Map<String, Object?>) {
+      throw const FormatException('Backup must be a JSON object.');
+    }
+    await ref.read(settingsRepositoryProvider).importSettingsBackup(decoded);
+    ref.invalidate(appSettingsProvider);
+    ref.invalidate(kimaiApiClientProvider);
+  }
+
+  Future<void> _clearSettings(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear local settings?'),
+        content: const Text(
+          'Kimai URL, onboarding state and API token will be removed.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    await ref.read(settingsRepositoryProvider).clearLocalSettings();
+    await ref.read(secureTokenStorageProvider).deleteKimaiToken();
+    ref.invalidate(appSettingsProvider);
+    ref.invalidate(kimaiApiClientProvider);
   }
 }
 

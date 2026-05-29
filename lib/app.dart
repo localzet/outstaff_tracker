@@ -8,7 +8,10 @@ import 'core/theme/app_theme.dart';
 import 'features/analytics/presentation/analytics_screen.dart';
 import 'features/calendar/presentation/calendar_screen.dart';
 import 'features/dashboard/presentation/dashboard_screen.dart';
+import 'features/diagnostics/presentation/diagnostics_screen.dart';
+import 'features/onboarding/presentation/onboarding_screen.dart';
 import 'features/projects/presentation/projects_screen.dart';
+import 'features/settings/data/settings_repository.dart';
 import 'features/settings/presentation/settings_screen.dart';
 import 'features/sync/data/sync_controller.dart';
 import 'features/timesheets/presentation/timesheets_screen.dart';
@@ -19,7 +22,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: DashboardScreen.routePath,
+    redirect: (context, state) async {
+      final complete =
+          await ref.read(settingsRepositoryProvider).isOnboardingComplete();
+      final onboarding = state.uri.path == OnboardingScreen.routePath;
+      if (!complete && !onboarding) {
+        return OnboardingScreen.routePath;
+      }
+      if (complete && onboarding) {
+        return DashboardScreen.routePath;
+      }
+
+      return null;
+    },
     routes: <RouteBase>[
+      GoRoute(
+        path: OnboardingScreen.routePath,
+        builder: (context, state) => const OnboardingScreen(),
+      ),
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
         routes: <RouteBase>[
@@ -46,6 +66,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: SettingsScreen.routePath,
             builder: (context, state) => const SettingsScreen(),
+          ),
+          GoRoute(
+            path: DiagnosticsScreen.routePath,
+            builder: (context, state) => const DiagnosticsScreen(),
           ),
         ],
       ),
@@ -141,6 +165,11 @@ class AppShell extends StatelessWidget {
       label: 'Settings',
       path: SettingsScreen.routePath,
       icon: Icons.settings_rounded,
+    ),
+    NavigationDestinationData(
+      label: 'Diagnostics',
+      path: DiagnosticsScreen.routePath,
+      icon: Icons.health_and_safety_rounded,
     ),
   ];
 

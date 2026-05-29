@@ -34,3 +34,25 @@ flutter run -d windows
 flutter run -d chrome
 flutter run -d android
 ```
+
+## Validation
+
+```bash
+dart format lib test
+flutter analyze
+flutter test --reporter compact
+flutter build windows --debug
+flutter build windows --release
+```
+
+## Windows release
+
+```bash
+flutter build windows --release
+```
+
+The release executable is created under:
+
+```text
+build/windows/x64/runner/Release/outstaff_tracker.exe
+```
