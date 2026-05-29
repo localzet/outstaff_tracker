@@ -1,0 +1,160 @@
+import 'package:drift/drift.dart';
+import 'package:drift_flutter/drift_flutter.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+part 'app_database.g.dart';
+
+class UsersLocal extends Table {
+  TextColumn get id => text()();
+  IntColumn get kimaiUserId => integer().nullable()();
+  TextColumn get displayName => text().nullable()();
+  TextColumn get email => text().nullable()();
+  TextColumn get timezone => text().withDefault(const Constant('UTC'))();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+class SyncState extends Table {
+  TextColumn get key => text()();
+  TextColumn get value => text().nullable()();
+  DateTimeColumn get lastSyncedAt => dateTime().nullable()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {key};
+}
+
+class KimaiProjects extends Table {
+  IntColumn get id => integer()();
+  TextColumn get name => text()();
+  TextColumn get customerName => text().nullable()();
+  BoolColumn get visible => boolean().withDefault(const Constant(true))();
+  BoolColumn get billable => boolean().withDefault(const Constant(true))();
+  TextColumn get color => text().nullable()();
+  DateTimeColumn get kimaiUpdatedAt => dateTime().nullable()();
+  DateTimeColumn get syncedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+class AppProjects extends Table {
+  TextColumn get id => text()();
+  IntColumn get kimaiProjectId => integer()
+      .nullable()
+      .customConstraint('NULL REFERENCES kimai_projects(id)')();
+  TextColumn get name => text()();
+  TextColumn get color => text().nullable()();
+  BoolColumn get enabled => boolean().withDefault(const Constant(true))();
+  RealColumn get hourlyRate => real().nullable()();
+  RealColumn get weeklyGoalHours => real().nullable()();
+  TextColumn get currency => text().withDefault(const Constant('USD'))();
+  TextColumn get payoutRule => text().withDefault(const Constant('none'))();
+  BoolColumn get archived => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+class PayoutDates extends Table {
+  TextColumn get id => text()();
+  TextColumn get appProjectId =>
+      text().customConstraint('NOT NULL REFERENCES app_projects(id)')();
+  DateTimeColumn get payoutDate => dateTime()();
+  RealColumn get expectedAmount => real().nullable()();
+  TextColumn get currency => text().withDefault(const Constant('USD'))();
+  TextColumn get note => text().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+class Timesheets extends Table {
+  IntColumn get id => integer()();
+  IntColumn get kimaiProjectId => integer()
+      .nullable()
+      .customConstraint('NULL REFERENCES kimai_projects(id)')();
+  TextColumn get appProjectId =>
+      text().nullable().customConstraint('NULL REFERENCES app_projects(id)')();
+  TextColumn get activityName => text().nullable()();
+  TextColumn get description => text().nullable()();
+  DateTimeColumn get beginAt => dateTime()();
+  DateTimeColumn get endAt => dateTime().nullable()();
+  IntColumn get durationSeconds => integer().withDefault(const Constant(0))();
+  RealColumn get rate => real().nullable()();
+  TextColumn get currency => text().nullable()();
+  BoolColumn get exported => boolean().withDefault(const Constant(false))();
+  TextColumn get tags => text().nullable()();
+  DateTimeColumn get kimaiUpdatedAt => dateTime().nullable()();
+  DateTimeColumn get syncedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+class SyncLogs extends Table {
+  TextColumn get id => text()();
+  TextColumn get operation => text()();
+  TextColumn get status => text()();
+  TextColumn get message => text().nullable()();
+  DateTimeColumn get startedAt => dateTime()();
+  DateTimeColumn get finishedAt => dateTime().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+@DriftDatabase(
+  tables: [
+    UsersLocal,
+    SyncState,
+    KimaiProjects,
+    AppProjects,
+    PayoutDates,
+    Timesheets,
+    SyncLogs,
+  ],
+)
+class AppDatabase extends _$AppDatabase {
+  AppDatabase([QueryExecutor? executor])
+      : super(
+          executor ??
+              driftDatabase(
+                name: 'outstaff_tracker',
+                native: const DriftNativeOptions(shareAcrossIsolates: true),
+                web: DriftWebOptions(
+                  sqlite3Wasm: Uri.parse('sqlite3.wasm'),
+                  driftWorker: Uri.parse('drift_worker.js'),
+                ),
+              ),
+        );
+
+  @override
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onCreate: (m) => m.createAll(),
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            await m.addColumn(appProjects, appProjects.enabled);
+            await m.addColumn(appProjects, appProjects.weeklyGoalHours);
+            await m.addColumn(appProjects, appProjects.payoutRule);
+          }
+        },
+      );
+}
+
+final appDatabaseProvider = Provider<AppDatabase>((ref) {
+  final database = AppDatabase();
+  ref.onDispose(database.close);
+
+  return database;
+});
