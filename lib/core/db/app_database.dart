@@ -107,6 +107,7 @@ class SyncLogs extends Table {
   TextColumn get status => text()();
   TextColumn get message => text().nullable()();
   TextColumn get error => text().nullable()();
+  TextColumn get debug => text().nullable()();
   DateTimeColumn get startedAt => dateTime()();
   DateTimeColumn get finishedAt => dateTime().nullable()();
 
@@ -140,7 +141,7 @@ class AppDatabase extends _$AppDatabase {
         );
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -157,6 +158,9 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 4) {
             await m.addColumn(syncLogs, syncLogs.error);
+          }
+          if (from < 5) {
+            await m.addColumn(syncLogs, syncLogs.debug);
           }
         },
       );

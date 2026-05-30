@@ -172,6 +172,7 @@ class _ProjectConfigurationTileState
                 width: 180,
                 child: DropdownButtonFormField<PayoutRule>(
                   initialValue: payoutRule,
+                  isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'Payout rule',
                     prefixIcon: Icon(Icons.event_repeat_rounded, size: 18),
@@ -180,7 +181,10 @@ class _ProjectConfigurationTileState
                     for (final rule in PayoutRule.values)
                       DropdownMenuItem(
                         value: rule,
-                        child: Text(rule.label),
+                        child: Text(
+                          rule.label,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                   ],
                   onChanged: (rule) {

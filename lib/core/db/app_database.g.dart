@@ -2959,6 +2959,11 @@ class $SyncLogsTable extends SyncLogs with TableInfo<$SyncLogsTable, SyncLog> {
   late final GeneratedColumn<String> error = GeneratedColumn<String>(
       'error', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _debugMeta = const VerificationMeta('debug');
+  @override
+  late final GeneratedColumn<String> debug = GeneratedColumn<String>(
+      'debug', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   static const VerificationMeta _startedAtMeta =
       const VerificationMeta('startedAt');
   @override
@@ -2973,7 +2978,7 @@ class $SyncLogsTable extends SyncLogs with TableInfo<$SyncLogsTable, SyncLog> {
       type: DriftSqlType.dateTime, requiredDuringInsert: false);
   @override
   List<GeneratedColumn> get $columns =>
-      [id, operation, status, message, error, startedAt, finishedAt];
+      [id, operation, status, message, error, debug, startedAt, finishedAt];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -3009,6 +3014,10 @@ class $SyncLogsTable extends SyncLogs with TableInfo<$SyncLogsTable, SyncLog> {
       context.handle(
           _errorMeta, error.isAcceptableOrUnknown(data['error']!, _errorMeta));
     }
+    if (data.containsKey('debug')) {
+      context.handle(
+          _debugMeta, debug.isAcceptableOrUnknown(data['debug']!, _debugMeta));
+    }
     if (data.containsKey('started_at')) {
       context.handle(_startedAtMeta,
           startedAt.isAcceptableOrUnknown(data['started_at']!, _startedAtMeta));
@@ -3040,6 +3049,8 @@ class $SyncLogsTable extends SyncLogs with TableInfo<$SyncLogsTable, SyncLog> {
           .read(DriftSqlType.string, data['${effectivePrefix}message']),
       error: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}error']),
+      debug: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}debug']),
       startedAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}started_at'])!,
       finishedAt: attachedDatabase.typeMapping
@@ -3059,6 +3070,7 @@ class SyncLog extends DataClass implements Insertable<SyncLog> {
   final String status;
   final String? message;
   final String? error;
+  final String? debug;
   final DateTime startedAt;
   final DateTime? finishedAt;
   const SyncLog(
@@ -3067,6 +3079,7 @@ class SyncLog extends DataClass implements Insertable<SyncLog> {
       required this.status,
       this.message,
       this.error,
+      this.debug,
       required this.startedAt,
       this.finishedAt});
   @override
@@ -3080,6 +3093,9 @@ class SyncLog extends DataClass implements Insertable<SyncLog> {
     }
     if (!nullToAbsent || error != null) {
       map['error'] = Variable<String>(error);
+    }
+    if (!nullToAbsent || debug != null) {
+      map['debug'] = Variable<String>(debug);
     }
     map['started_at'] = Variable<DateTime>(startedAt);
     if (!nullToAbsent || finishedAt != null) {
@@ -3098,6 +3114,8 @@ class SyncLog extends DataClass implements Insertable<SyncLog> {
           : Value(message),
       error:
           error == null && nullToAbsent ? const Value.absent() : Value(error),
+      debug:
+          debug == null && nullToAbsent ? const Value.absent() : Value(debug),
       startedAt: Value(startedAt),
       finishedAt: finishedAt == null && nullToAbsent
           ? const Value.absent()
@@ -3114,6 +3132,7 @@ class SyncLog extends DataClass implements Insertable<SyncLog> {
       status: serializer.fromJson<String>(json['status']),
       message: serializer.fromJson<String?>(json['message']),
       error: serializer.fromJson<String?>(json['error']),
+      debug: serializer.fromJson<String?>(json['debug']),
       startedAt: serializer.fromJson<DateTime>(json['startedAt']),
       finishedAt: serializer.fromJson<DateTime?>(json['finishedAt']),
     );
@@ -3127,6 +3146,7 @@ class SyncLog extends DataClass implements Insertable<SyncLog> {
       'status': serializer.toJson<String>(status),
       'message': serializer.toJson<String?>(message),
       'error': serializer.toJson<String?>(error),
+      'debug': serializer.toJson<String?>(debug),
       'startedAt': serializer.toJson<DateTime>(startedAt),
       'finishedAt': serializer.toJson<DateTime?>(finishedAt),
     };
@@ -3138,6 +3158,7 @@ class SyncLog extends DataClass implements Insertable<SyncLog> {
           String? status,
           Value<String?> message = const Value.absent(),
           Value<String?> error = const Value.absent(),
+          Value<String?> debug = const Value.absent(),
           DateTime? startedAt,
           Value<DateTime?> finishedAt = const Value.absent()}) =>
       SyncLog(
@@ -3146,6 +3167,7 @@ class SyncLog extends DataClass implements Insertable<SyncLog> {
         status: status ?? this.status,
         message: message.present ? message.value : this.message,
         error: error.present ? error.value : this.error,
+        debug: debug.present ? debug.value : this.debug,
         startedAt: startedAt ?? this.startedAt,
         finishedAt: finishedAt.present ? finishedAt.value : this.finishedAt,
       );
@@ -3156,6 +3178,7 @@ class SyncLog extends DataClass implements Insertable<SyncLog> {
       status: data.status.present ? data.status.value : this.status,
       message: data.message.present ? data.message.value : this.message,
       error: data.error.present ? data.error.value : this.error,
+      debug: data.debug.present ? data.debug.value : this.debug,
       startedAt: data.startedAt.present ? data.startedAt.value : this.startedAt,
       finishedAt:
           data.finishedAt.present ? data.finishedAt.value : this.finishedAt,
@@ -3170,6 +3193,7 @@ class SyncLog extends DataClass implements Insertable<SyncLog> {
           ..write('status: $status, ')
           ..write('message: $message, ')
           ..write('error: $error, ')
+          ..write('debug: $debug, ')
           ..write('startedAt: $startedAt, ')
           ..write('finishedAt: $finishedAt')
           ..write(')'))
@@ -3177,8 +3201,8 @@ class SyncLog extends DataClass implements Insertable<SyncLog> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, operation, status, message, error, startedAt, finishedAt);
+  int get hashCode => Object.hash(
+      id, operation, status, message, error, debug, startedAt, finishedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -3188,6 +3212,7 @@ class SyncLog extends DataClass implements Insertable<SyncLog> {
           other.status == this.status &&
           other.message == this.message &&
           other.error == this.error &&
+          other.debug == this.debug &&
           other.startedAt == this.startedAt &&
           other.finishedAt == this.finishedAt);
 }
@@ -3198,6 +3223,7 @@ class SyncLogsCompanion extends UpdateCompanion<SyncLog> {
   final Value<String> status;
   final Value<String?> message;
   final Value<String?> error;
+  final Value<String?> debug;
   final Value<DateTime> startedAt;
   final Value<DateTime?> finishedAt;
   final Value<int> rowid;
@@ -3207,6 +3233,7 @@ class SyncLogsCompanion extends UpdateCompanion<SyncLog> {
     this.status = const Value.absent(),
     this.message = const Value.absent(),
     this.error = const Value.absent(),
+    this.debug = const Value.absent(),
     this.startedAt = const Value.absent(),
     this.finishedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -3217,6 +3244,7 @@ class SyncLogsCompanion extends UpdateCompanion<SyncLog> {
     required String status,
     this.message = const Value.absent(),
     this.error = const Value.absent(),
+    this.debug = const Value.absent(),
     required DateTime startedAt,
     this.finishedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -3230,6 +3258,7 @@ class SyncLogsCompanion extends UpdateCompanion<SyncLog> {
     Expression<String>? status,
     Expression<String>? message,
     Expression<String>? error,
+    Expression<String>? debug,
     Expression<DateTime>? startedAt,
     Expression<DateTime>? finishedAt,
     Expression<int>? rowid,
@@ -3240,6 +3269,7 @@ class SyncLogsCompanion extends UpdateCompanion<SyncLog> {
       if (status != null) 'status': status,
       if (message != null) 'message': message,
       if (error != null) 'error': error,
+      if (debug != null) 'debug': debug,
       if (startedAt != null) 'started_at': startedAt,
       if (finishedAt != null) 'finished_at': finishedAt,
       if (rowid != null) 'rowid': rowid,
@@ -3252,6 +3282,7 @@ class SyncLogsCompanion extends UpdateCompanion<SyncLog> {
       Value<String>? status,
       Value<String?>? message,
       Value<String?>? error,
+      Value<String?>? debug,
       Value<DateTime>? startedAt,
       Value<DateTime?>? finishedAt,
       Value<int>? rowid}) {
@@ -3261,6 +3292,7 @@ class SyncLogsCompanion extends UpdateCompanion<SyncLog> {
       status: status ?? this.status,
       message: message ?? this.message,
       error: error ?? this.error,
+      debug: debug ?? this.debug,
       startedAt: startedAt ?? this.startedAt,
       finishedAt: finishedAt ?? this.finishedAt,
       rowid: rowid ?? this.rowid,
@@ -3285,6 +3317,9 @@ class SyncLogsCompanion extends UpdateCompanion<SyncLog> {
     if (error.present) {
       map['error'] = Variable<String>(error.value);
     }
+    if (debug.present) {
+      map['debug'] = Variable<String>(debug.value);
+    }
     if (startedAt.present) {
       map['started_at'] = Variable<DateTime>(startedAt.value);
     }
@@ -3305,6 +3340,7 @@ class SyncLogsCompanion extends UpdateCompanion<SyncLog> {
           ..write('status: $status, ')
           ..write('message: $message, ')
           ..write('error: $error, ')
+          ..write('debug: $debug, ')
           ..write('startedAt: $startedAt, ')
           ..write('finishedAt: $finishedAt, ')
           ..write('rowid: $rowid')
@@ -5445,6 +5481,7 @@ typedef $$SyncLogsTableCreateCompanionBuilder = SyncLogsCompanion Function({
   required String status,
   Value<String?> message,
   Value<String?> error,
+  Value<String?> debug,
   required DateTime startedAt,
   Value<DateTime?> finishedAt,
   Value<int> rowid,
@@ -5455,6 +5492,7 @@ typedef $$SyncLogsTableUpdateCompanionBuilder = SyncLogsCompanion Function({
   Value<String> status,
   Value<String?> message,
   Value<String?> error,
+  Value<String?> debug,
   Value<DateTime> startedAt,
   Value<DateTime?> finishedAt,
   Value<int> rowid,
@@ -5483,6 +5521,9 @@ class $$SyncLogsTableFilterComposer
 
   ColumnFilters<String> get error => $composableBuilder(
       column: $table.error, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get debug => $composableBuilder(
+      column: $table.debug, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get startedAt => $composableBuilder(
       column: $table.startedAt, builder: (column) => ColumnFilters(column));
@@ -5515,6 +5556,9 @@ class $$SyncLogsTableOrderingComposer
   ColumnOrderings<String> get error => $composableBuilder(
       column: $table.error, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get debug => $composableBuilder(
+      column: $table.debug, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<DateTime> get startedAt => $composableBuilder(
       column: $table.startedAt, builder: (column) => ColumnOrderings(column));
 
@@ -5545,6 +5589,9 @@ class $$SyncLogsTableAnnotationComposer
 
   GeneratedColumn<String> get error =>
       $composableBuilder(column: $table.error, builder: (column) => column);
+
+  GeneratedColumn<String> get debug =>
+      $composableBuilder(column: $table.debug, builder: (column) => column);
 
   GeneratedColumn<DateTime> get startedAt =>
       $composableBuilder(column: $table.startedAt, builder: (column) => column);
@@ -5581,6 +5628,7 @@ class $$SyncLogsTableTableManager extends RootTableManager<
             Value<String> status = const Value.absent(),
             Value<String?> message = const Value.absent(),
             Value<String?> error = const Value.absent(),
+            Value<String?> debug = const Value.absent(),
             Value<DateTime> startedAt = const Value.absent(),
             Value<DateTime?> finishedAt = const Value.absent(),
             Value<int> rowid = const Value.absent(),
@@ -5591,6 +5639,7 @@ class $$SyncLogsTableTableManager extends RootTableManager<
             status: status,
             message: message,
             error: error,
+            debug: debug,
             startedAt: startedAt,
             finishedAt: finishedAt,
             rowid: rowid,
@@ -5601,6 +5650,7 @@ class $$SyncLogsTableTableManager extends RootTableManager<
             required String status,
             Value<String?> message = const Value.absent(),
             Value<String?> error = const Value.absent(),
+            Value<String?> debug = const Value.absent(),
             required DateTime startedAt,
             Value<DateTime?> finishedAt = const Value.absent(),
             Value<int> rowid = const Value.absent(),
@@ -5611,6 +5661,7 @@ class $$SyncLogsTableTableManager extends RootTableManager<
             status: status,
             message: message,
             error: error,
+            debug: debug,
             startedAt: startedAt,
             finishedAt: finishedAt,
             rowid: rowid,

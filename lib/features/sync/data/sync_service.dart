@@ -31,11 +31,13 @@ class TimesheetSyncResult {
     required this.importedEntries,
     required this.enabledProjects,
     required this.failedProjects,
+    required this.debugReport,
   });
 
   final int importedEntries;
   final int enabledProjects;
   final List<String> failedProjects;
+  final String debugReport;
 
   bool get hasFailures => failedProjects.isNotEmpty;
 }
@@ -60,12 +62,10 @@ class SyncService {
   Future<TimesheetSyncResult> fullSyncLastYear({
     void Function(SyncProgress progress)? onProgress,
   }) {
-    final end = DateTime.now();
-    final begin = end.subtract(const Duration(days: 365));
+    final range = buildFullYearSyncRange();
 
     return _syncTimesheets(
-      begin: begin,
-      end: end,
+      ranges: _splitByMonth(range),
       mode: TimesheetSyncMode.full,
       onProgress: onProgress,
     );
@@ -74,12 +74,10 @@ class SyncService {
   Future<TimesheetSyncResult> incrementalSyncLast7Days({
     void Function(SyncProgress progress)? onProgress,
   }) {
-    final end = DateTime.now();
-    final begin = end.subtract(const Duration(days: 7));
+    final range = buildLast7DaysSyncRange();
 
     return _syncTimesheets(
-      begin: begin,
-      end: end,
+      ranges: [range],
       mode: TimesheetSyncMode.incremental,
       onProgress: onProgress,
     );
@@ -88,20 +86,17 @@ class SyncService {
   Future<TimesheetSyncResult> manualSync({
     void Function(SyncProgress progress)? onProgress,
   }) {
-    final end = DateTime.now();
-    final begin = end.subtract(const Duration(days: 7));
+    final range = buildLast7DaysSyncRange();
 
     return _syncTimesheets(
-      begin: begin,
-      end: end,
+      ranges: [range],
       mode: TimesheetSyncMode.manual,
       onProgress: onProgress,
     );
   }
 
   Future<TimesheetSyncResult> _syncTimesheets({
-    required DateTime begin,
-    required DateTime end,
+    required List<KimaiSyncRange> ranges,
     required TimesheetSyncMode mode,
     void Function(SyncProgress progress)? onProgress,
   }) async {
@@ -124,8 +119,12 @@ class SyncService {
           .getEnabledKimaiAppProjects();
       final client = await _ref.read(kimaiApiClientProvider.future);
       final timesheetsRepository = _ref.read(timesheetsRepositoryProvider);
+      final firstBegin = ranges.first.begin;
+      final finalEnd = ranges.last.end;
       var importedEntries = 0;
+      var remoteEntriesFetched = 0;
       final failures = <String>[];
+      final projectReports = <String>[];
       var completedProjects = 0;
 
       for (final project in enabledProjects) {
@@ -143,21 +142,59 @@ class SyncService {
         );
 
         try {
-          final timesheets = await _retryTransient(
-            () => client.fetchTimesheets(begin, end, projectId: kimaiProjectId),
+          final projectEntriesById = <int, KimaiTimesheetDto>{};
+          final projectRequests = <KimaiTimesheetRequestSummary>[];
+          for (final range in ranges) {
+            final result = await _retryTransient(
+              () => client.fetchTimesheetsDetailed(
+                range.begin,
+                range.end,
+                projectId: kimaiProjectId,
+              ),
+            );
+            for (final entry in result.entries) {
+              projectEntriesById[entry.id] = entry;
+            }
+            projectRequests.addAll(result.requests);
+          }
+          final projectEntries = projectEntriesById.values.toList(
+            growable: false,
           );
           await timesheetsRepository.upsertRemoteTimesheets(
-            timesheets,
+            projectEntries,
             enabledProjects,
           );
-          importedEntries += timesheets.length;
-        } catch (error) {
-          failures.add(
-            _formatProjectFailure(
-              error,
+          remoteEntriesFetched += projectEntries.length;
+          importedEntries += projectEntries.length;
+          projectReports.add(
+            _formatProjectReport(
               projectName: project.name,
               projectId: kimaiProjectId,
-              mode: mode,
+              begin: firstBegin,
+              end: finalEnd,
+              status: 'success',
+              entriesReceived: projectEntries.length,
+              requests: projectRequests,
+            ),
+          );
+        } catch (error) {
+          final failure = _formatProjectFailure(
+            error,
+            projectName: project.name,
+            projectId: kimaiProjectId,
+            mode: mode,
+          );
+          failures.add(failure);
+          projectReports.add(
+            _formatProjectReport(
+              projectName: project.name,
+              projectId: kimaiProjectId,
+              begin: firstBegin,
+              end: finalEnd,
+              status: 'failed',
+              entriesReceived: 0,
+              requests: const [],
+              error: failure,
             ),
           );
         } finally {
@@ -168,6 +205,16 @@ class SyncService {
       // TODO: Add reconciliation for remote deletions after confirming Kimai deletion semantics.
       final finishedAt = DateTime.now().toUtc();
       final status = failures.isEmpty ? 'success' : 'partial';
+      final debugReport = _formatSyncDebugReport(
+        mode: mode,
+        begin: firstBegin,
+        end: finalEnd,
+        enabledProjects: enabledProjects.length,
+        remoteEntriesFetched: remoteEntriesFetched,
+        localUpserts: importedEntries,
+        failedProjects: failures.length,
+        projectReports: projectReports,
+      );
       await database.transaction(() async {
         await (database.update(database.syncLogs)
               ..where((table) => table.id.equals(logId)))
@@ -175,12 +222,11 @@ class SyncService {
           SyncLogsCompanion(
             status: Value(status),
             message: Value(
-              failures.isEmpty
-                  ? 'Synced $importedEntries entries from ${enabledProjects.length} projects'
-                  : 'Synced $importedEntries entries; failed ${failures.length} projects',
+              'Projects: ${enabledProjects.length}; fetched: $remoteEntriesFetched; upserts: $importedEntries; failed: ${failures.length}',
             ),
             error:
                 Value(failures.isEmpty ? null : failures.join('\n\n---\n\n')),
+            debug: Value(debugReport),
             finishedAt: Value(finishedAt),
           ),
         );
@@ -198,6 +244,7 @@ class SyncService {
         importedEntries: importedEntries,
         enabledProjects: enabledProjects.length,
         failedProjects: failures,
+        debugReport: debugReport,
       );
     } catch (error, stackTrace) {
       final finishedAt = DateTime.now().toUtc();
@@ -209,12 +256,27 @@ class SyncService {
           status: const Value('failed'),
           message: Value(error.toString()),
           error: Value(details),
+          debug: Value(details),
           finishedAt: Value(finishedAt),
         ),
       );
 
       Error.throwWithStackTrace(SyncFailureException(details), stackTrace);
     }
+  }
+
+  static List<KimaiSyncRange> _splitByMonth(KimaiSyncRange range) {
+    final chunks = <KimaiSyncRange>[];
+    var cursor = range.begin;
+    while (!cursor.isAfter(range.end)) {
+      final nextMonth = DateTime(cursor.year, cursor.month + 1);
+      final monthEnd = nextMonth.subtract(const Duration(seconds: 1));
+      final chunkEnd = monthEnd.isBefore(range.end) ? monthEnd : range.end;
+      chunks.add(KimaiSyncRange(begin: cursor, end: chunkEnd));
+      cursor = nextMonth;
+    }
+
+    return chunks;
   }
 
   Future<T> _retryTransient<T>(Future<T> Function() action) async {
@@ -262,6 +324,63 @@ class SyncService {
     return [
       'project_name=$projectName',
       _formatSyncError(error, mode: mode, projectId: projectId),
+    ].join('\n');
+  }
+
+  String _formatSyncDebugReport({
+    required TimesheetSyncMode mode,
+    required DateTime begin,
+    required DateTime end,
+    required int enabledProjects,
+    required int remoteEntriesFetched,
+    required int localUpserts,
+    required int failedProjects,
+    required List<String> projectReports,
+  }) {
+    return [
+      'sync_type=${mode.name}',
+      'begin=${formatKimaiDateTime(begin)}',
+      'end=${formatKimaiDateTime(end)}',
+      'enabled_projects=$enabledProjects',
+      'total_remote_entries_fetched=$remoteEntriesFetched',
+      'total_local_upserts=$localUpserts',
+      'failed_projects=$failedProjects',
+      for (final report in projectReports) ...[
+        'project_sync_start',
+        report,
+        'project_sync_end',
+      ],
+    ].join('\n');
+  }
+
+  String _formatProjectReport({
+    required String projectName,
+    required int projectId,
+    required DateTime begin,
+    required DateTime end,
+    required String status,
+    required int entriesReceived,
+    required List<KimaiTimesheetRequestSummary> requests,
+    String? error,
+  }) {
+    return [
+      'project_name=$projectName',
+      'project_id=$projectId',
+      'first_begin=${formatKimaiDateTime(begin)}',
+      'final_end=${formatKimaiDateTime(end)}',
+      'status=$status',
+      'pages_requested=${requests.length}',
+      'entries_received=$entriesReceived',
+      for (final request in requests) ...[
+        'request_start',
+        request.toDiagnosticString(),
+        'request_end',
+      ],
+      if (error != null) ...[
+        'error_start',
+        error,
+        'error_end',
+      ],
     ].join('\n');
   }
 

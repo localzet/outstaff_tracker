@@ -50,7 +50,7 @@ void main() {
   });
 
   group('buildTimesheetQueryParams', () {
-    test('builds date and pagination params without null project', () {
+    test('builds date params without null project or pagination', () {
       final params = buildTimesheetQueryParams(
         begin: DateTime(2026, 5, 1),
         end: DateTime(2026, 5, 8, 23, 59, 58),

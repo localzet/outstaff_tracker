@@ -71,16 +71,23 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
                 child: projects.when(
                   data: (items) => DropdownButtonFormField<String?>(
                     initialValue: _projectId,
+                    isExpanded: true,
                     decoration: const InputDecoration(labelText: 'Project'),
                     items: [
                       const DropdownMenuItem(
                         value: null,
-                        child: Text('All projects'),
+                        child: Text(
+                          'All projects',
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                       for (final project in items)
                         DropdownMenuItem(
                           value: project.appProjectId,
-                          child: Text(project.name),
+                          child: Text(
+                            project.name,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                     ],
                     onChanged: (value) => setState(() => _projectId = value),
@@ -103,19 +110,23 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
                 width: 180,
                 child: DropdownButtonFormField<TimesheetSortField>(
                   initialValue: _sortField,
+                  isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Sort by'),
                   items: const [
                     DropdownMenuItem(
                       value: TimesheetSortField.date,
-                      child: Text('Date'),
+                      child: Text('Date', overflow: TextOverflow.ellipsis),
                     ),
                     DropdownMenuItem(
                       value: TimesheetSortField.duration,
-                      child: Text('Duration'),
+                      child: Text(
+                        'Duration',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     DropdownMenuItem(
                       value: TimesheetSortField.amount,
-                      child: Text('Amount'),
+                      child: Text('Amount', overflow: TextOverflow.ellipsis),
                     ),
                   ],
                   onChanged: (value) {

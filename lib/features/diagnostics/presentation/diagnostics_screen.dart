@@ -67,6 +67,13 @@ class DiagnosticsScreen extends ConsumerWidget {
                                   ?.copyWith(color: AppColors.warning),
                             ),
                           ],
+                          if (log.debug != null && log.debug!.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            SelectableText(
+                              log.debug!,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -91,6 +98,23 @@ class DiagnosticsScreen extends ConsumerWidget {
                         },
                         icon: const Icon(Icons.copy_rounded, size: 18),
                         label: const Text('Copy last error'),
+                      ),
+                    if (data.lastSyncDebugReport != null)
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          await Clipboard.setData(
+                            ClipboardData(text: data.lastSyncDebugReport!),
+                          );
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Last sync debug copied'),
+                              ),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.copy_rounded, size: 18),
+                        label: const Text('Copy last sync debug report'),
                       ),
                     OutlinedButton.icon(
                       onPressed: () async {
@@ -148,6 +172,17 @@ class _DiagnosticsData {
     return null;
   }
 
+  String? get lastSyncDebugReport {
+    for (final log in logs) {
+      final debug = log.debug;
+      if (debug != null && debug.isNotEmpty) {
+        return debug;
+      }
+    }
+
+    return null;
+  }
+
   String get report {
     return [
       'Outstaff Tracker diagnostics',
@@ -161,6 +196,11 @@ class _DiagnosticsData {
           'sync_error_start',
           log.error!,
           'sync_error_end',
+        ],
+        if (log.debug != null && log.debug!.isNotEmpty) ...[
+          'sync_debug_start',
+          log.debug!,
+          'sync_debug_end',
         ],
       ],
     ].join('\n');

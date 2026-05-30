@@ -49,40 +49,30 @@ class KimaiApiClient {
     DateTime end, {
     int? projectId,
   }) async {
-    final result = <KimaiTimesheetDto>[];
-    final firstResponse = await _request<Object?>(
-      path: 'timesheets',
-      method: 'GET',
-      queryParameters: buildTimesheetQueryParams(
-        begin: begin,
-        end: end,
-        projectId: projectId,
-      ),
+    final result = await fetchTimesheetsDetailed(
+      begin,
+      end,
+      projectId: projectId,
     );
 
-    result.addAll(_mapTimesheetResponse(firstResponse.data));
+    return result.entries;
+  }
 
-    final totalPages = _readPaginationHeader(firstResponse, 'x-total-pages');
-    if (totalPages == null || totalPages <= 1) {
-      return result;
-    }
-
-    for (var page = 2; page <= totalPages; page++) {
-      final pageResponse = await _request<Object?>(
+  Future<KimaiTimesheetFetchResult> fetchTimesheetsDetailed(
+    DateTime begin,
+    DateTime end, {
+    int? projectId,
+  }) {
+    return fetchKimaiTimesheetPages(
+      begin: begin,
+      end: end,
+      projectId: projectId,
+      requestPage: (queryParameters) => _request<Object?>(
         path: 'timesheets',
         method: 'GET',
-        queryParameters: buildTimesheetQueryParams(
-          begin: begin,
-          end: end,
-          projectId: projectId,
-          page: page,
-        ),
-      );
-
-      result.addAll(_mapTimesheetResponse(pageResponse.data));
-    }
-
-    return result;
+        queryParameters: queryParameters,
+      ),
+    );
   }
 
   Future<Response<T>> _request<T>({
@@ -139,6 +129,108 @@ class KimaiApiClient {
   }
 }
 
+const kimaiDefaultPageSize = 50;
+const kimaiMaxPages = 1000;
+
+typedef KimaiTimesheetPageRequester = Future<Response<Object?>> Function(
+  Map<String, Object> queryParameters,
+);
+
+Future<KimaiTimesheetFetchResult> fetchKimaiTimesheetPages({
+  required DateTime begin,
+  required DateTime end,
+  required KimaiTimesheetPageRequester requestPage,
+  int? projectId,
+}) async {
+  final entries = <KimaiTimesheetDto>[];
+  final requests = <KimaiTimesheetRequestSummary>[];
+  final seenIds = <int>{};
+
+  Future<TimesheetPageReadResult> loadPage(int? page) async {
+    final queryParameters = buildTimesheetQueryParams(
+      begin: begin,
+      end: end,
+      projectId: projectId,
+      page: page,
+    );
+    final response = await requestPage(queryParameters);
+    final readResult = readTimesheetPage(response);
+    requests.add(
+      KimaiTimesheetRequestSummary(
+        projectId: projectId,
+        page: page,
+        queryParameters: queryParameters,
+        statusCode: response.statusCode,
+        responseShape: readResult.responseShape,
+        entriesReceived: readResult.entries.length,
+        currentPage: readResult.currentPage,
+        totalPages: readResult.totalPages,
+      ),
+    );
+
+    return readResult;
+  }
+
+  void addUniqueEntries(List<KimaiTimesheetDto> pageEntries) {
+    for (final entry in pageEntries) {
+      if (seenIds.add(entry.id)) {
+        entries.add(entry);
+      }
+    }
+  }
+
+  final firstPage = await loadPage(null);
+  addUniqueEntries(firstPage.entries);
+  if (firstPage.entries.isEmpty) {
+    return KimaiTimesheetFetchResult(entries: entries, requests: requests);
+  }
+
+  final totalPages = firstPage.totalPages;
+  if (totalPages != null) {
+    if (totalPages > kimaiMaxPages) {
+      throw StateError('Kimai pagination exceeded safety cap: $totalPages');
+    }
+    for (var page = (firstPage.currentPage ?? 1) + 1;
+        page <= totalPages;
+        page++) {
+      final nextPage = await loadPage(page);
+      addUniqueEntries(nextPage.entries);
+    }
+
+    return KimaiTimesheetFetchResult(entries: entries, requests: requests);
+  }
+
+  if (firstPage.entries.length < kimaiDefaultPageSize) {
+    return KimaiTimesheetFetchResult(entries: entries, requests: requests);
+  }
+
+  for (var page = 2; page <= kimaiMaxPages; page++) {
+    final nextPage = await loadPage(page);
+    if (nextPage.entries.isEmpty) {
+      break;
+    }
+
+    final before = seenIds.length;
+    addUniqueEntries(nextPage.entries);
+    if (seenIds.length == before) {
+      break;
+    }
+
+    final nextTotalPages = nextPage.totalPages;
+    if (nextTotalPages != null && page >= nextTotalPages) {
+      break;
+    }
+    if (nextPage.entries.length < kimaiDefaultPageSize) {
+      break;
+    }
+    if (page == kimaiMaxPages) {
+      throw StateError('Kimai pagination reached safety cap: $kimaiMaxPages');
+    }
+  }
+
+  return KimaiTimesheetFetchResult(entries: entries, requests: requests);
+}
+
 Map<String, Object> buildTimesheetQueryParams({
   required DateTime begin,
   required DateTime end,
@@ -153,6 +245,28 @@ Map<String, Object> buildTimesheetQueryParams({
     if (projectId != null) 'project': projectId,
     if (page != null) 'page': page,
   };
+}
+
+KimaiSyncRange buildFullYearSyncRange([DateTime? now]) {
+  final localNow = now ?? DateTime.now();
+  final today = DateTime(localNow.year, localNow.month, localNow.day);
+
+  return KimaiSyncRange(
+    begin: today.subtract(const Duration(days: 365)),
+    end:
+        today.add(const Duration(days: 1)).subtract(const Duration(seconds: 1)),
+  );
+}
+
+KimaiSyncRange buildLast7DaysSyncRange([DateTime? now]) {
+  final localNow = now ?? DateTime.now();
+  final today = DateTime(localNow.year, localNow.month, localNow.day);
+
+  return KimaiSyncRange(
+    begin: today.subtract(const Duration(days: 7)),
+    end:
+        today.add(const Duration(days: 1)).subtract(const Duration(seconds: 1)),
+  );
 }
 
 String formatKimaiDateTime(DateTime value) {
@@ -264,10 +378,67 @@ String _formatDiagnosticPath(String path) {
   return '/$normalized';
 }
 
+TimesheetPageReadResult readTimesheetPage(Response<Object?> response) {
+  final entries = _mapTimesheetResponse(response.data);
+
+  return TimesheetPageReadResult(
+    entries: entries,
+    responseShape: describeKimaiResponseShape(response.data),
+    currentPage: _readPaginationHeader(response, 'x-page') ??
+        _readIntField(response.data, const ['currentPage', 'page']),
+    totalPages: _readPaginationHeader(response, 'x-total-pages') ??
+        _readIntField(response.data, const ['totalPages', 'pages']),
+  );
+}
+
+String describeKimaiResponseShape(Object? data) {
+  if (data is List) {
+    return 'list(length=${data.length})';
+  }
+
+  if (data is Map<String, Object?>) {
+    final keys = data.keys.join(',');
+    for (final key in const ['data', 'items', 'results']) {
+      final value = data[key];
+      if (value is List) {
+        return 'map(keys=$keys,$key.length=${value.length})';
+      }
+    }
+
+    return 'map(keys=$keys)';
+  }
+
+  return data == null ? 'null' : data.runtimeType.toString();
+}
+
 int? _readPaginationHeader(Response<Object?> response, String name) {
   final value = response.headers.value(name);
 
   return value == null ? null : int.tryParse(value);
+}
+
+int? _readIntField(Object? data, List<String> keys) {
+  if (data is! Map<String, Object?>) {
+    return null;
+  }
+
+  for (final key in keys) {
+    final value = data[key];
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      final parsed = int.tryParse(value);
+      if (parsed != null) {
+        return parsed;
+      }
+    }
+  }
+
+  return null;
 }
 
 List<KimaiTimesheetDto> _mapTimesheetResponse(Object? data) {
@@ -275,6 +446,81 @@ List<KimaiTimesheetDto> _mapTimesheetResponse(Object? data) {
       .whereType<Map<String, Object?>>()
       .map(KimaiTimesheetDto.fromJson)
       .toList(growable: false);
+}
+
+class KimaiTimesheetFetchResult {
+  const KimaiTimesheetFetchResult({
+    required this.entries,
+    required this.requests,
+  });
+
+  final List<KimaiTimesheetDto> entries;
+  final List<KimaiTimesheetRequestSummary> requests;
+
+  String toDiagnosticString() {
+    return [
+      'pages_requested=${requests.length}',
+      'entries_received=${entries.length}',
+      for (final request in requests) request.toDiagnosticString(),
+    ].join('\n');
+  }
+}
+
+class KimaiTimesheetRequestSummary {
+  const KimaiTimesheetRequestSummary({
+    required this.projectId,
+    required this.page,
+    required this.queryParameters,
+    required this.statusCode,
+    required this.responseShape,
+    required this.entriesReceived,
+    this.currentPage,
+    this.totalPages,
+  });
+
+  final int? projectId;
+  final int? page;
+  final Map<String, Object> queryParameters;
+  final int? statusCode;
+  final String responseShape;
+  final int entriesReceived;
+  final int? currentPage;
+  final int? totalPages;
+
+  String toDiagnosticString() {
+    return [
+      'request=GET /api/timesheets',
+      if (projectId != null) 'project_id=$projectId',
+      'page=${page ?? 'initial'}',
+      'query_parameters=$queryParameters',
+      'status_code=${statusCode ?? 'unknown'}',
+      'response_shape=$responseShape',
+      'entries_received=$entriesReceived',
+      if (currentPage != null) 'current_page=$currentPage',
+      if (totalPages != null) 'total_pages=$totalPages',
+    ].join('\n');
+  }
+}
+
+class TimesheetPageReadResult {
+  const TimesheetPageReadResult({
+    required this.entries,
+    required this.responseShape,
+    this.currentPage,
+    this.totalPages,
+  });
+
+  final List<KimaiTimesheetDto> entries;
+  final String responseShape;
+  final int? currentPage;
+  final int? totalPages;
+}
+
+class KimaiSyncRange {
+  const KimaiSyncRange({required this.begin, required this.end});
+
+  final DateTime begin;
+  final DateTime end;
 }
 
 List<Object?> _readResponseList(Object? data) {
