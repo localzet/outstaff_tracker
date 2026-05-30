@@ -94,7 +94,32 @@ jobs:
           $source = (Resolve-Path "build\windows\x64\runner\Release").Path
           $output = (Resolve-Path "release").Path
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          & $iscc "windows\installer\outstaff_tracker.iss" "/DAppVersion=$env:VERSION" "/DSourceDir=$source" "/DOutputDir=$output"
+          & $iscc "installer\windows\outstaff_tracker.iss" "/DAppVersion=$env:VERSION" "/DAppPublisher=Zorin Projects S.P." "/DSourceDir=$source" "/DOutputDir=$output"
+
+      - name: Smoke test Windows installer
+        shell: pwsh
+        run: |
+          $installer = (Resolve-Path "release\outstaff_tracker-setup-$env:VERSION.exe").Path
+          $installDir = Join-Path $env:RUNNER_TEMP "Outstaff Tracker"
+          & $installer /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER "/DIR=$installDir"
+          $exe = Join-Path $installDir "outstaff_tracker.exe"
+          if (!(Test-Path $exe)) {
+            throw "Installed executable was not found: $exe"
+          }
+          $entry = Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" |
+            Where-Object { $_.DisplayName -eq "Outstaff Tracker" } |
+            Select-Object -First 1
+          if ($null -eq $entry) {
+            throw "Uninstall entry was not found"
+          }
+          $process = Start-Process -FilePath $exe -WindowStyle Hidden -PassThru
+          Start-Sleep -Seconds 5
+          if ($process.HasExited) {
+            throw "Installed app exited during startup smoke test with code $($process.ExitCode)"
+          }
+          Stop-Process -Id $process.Id -Force
+          $uninstaller = Join-Path $installDir "unins000.exe"
+          & $uninstaller /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
