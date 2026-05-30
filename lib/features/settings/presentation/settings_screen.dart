@@ -33,6 +33,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _formKey = GlobalKey<FormState>();
   final _baseUrlController = TextEditingController();
   final _tokenController = TextEditingController();
+  final _capacityController = TextEditingController();
+  bool _assumePastPayoutsPaid = true;
 
   bool _settingsLoaded = false;
   bool _saving = false;
@@ -42,6 +44,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void dispose() {
     _baseUrlController.dispose();
     _tokenController.dispose();
+    _capacityController.dispose();
     super.dispose();
   }
 
@@ -89,6 +92,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         hintText: 'Хранится защищённо на устройстве',
                       ),
                       obscureText: true,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _capacityController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Комфортная загрузка в неделю',
+                        suffixText: 'ч',
+                        helperText:
+                            'Используется для оценки свободной мощности.',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _assumePastPayoutsPaid,
+                      onChanged: (value) {
+                        setState(() => _assumePastPayoutsPaid = value);
+                      },
+                      title: const Text(
+                        'Считать прошлые выплаты предположительно оплаченными',
+                      ),
+                      subtitle: const Text(
+                        'Скрывает старые выплаты из списка действий после первого импорта.',
+                      ),
                     ),
                     const SizedBox(height: 24),
                     Wrap(
@@ -164,6 +194,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
 
     _baseUrlController.text = settings.baseUrl;
+    _capacityController.text =
+        settings.comfortableWeeklyCapacityHours.toStringAsFixed(0);
+    _assumePastPayoutsPaid = settings.assumePastPayoutsPaid;
     _settingsLoaded = true;
   }
 
@@ -174,10 +207,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     setState(() => _saving = true);
     try {
+      final currentSettings =
+          await ref.read(settingsRepositoryProvider).loadSettings();
+      final capacity = double.tryParse(
+            _capacityController.text.trim().replaceAll(',', '.'),
+          ) ??
+          currentSettings.comfortableWeeklyCapacityHours;
       final settings = AppSettings(
         baseUrl: normalizeKimaiBaseUrl(_baseUrlController.text),
         currency: 'RUB',
         locale: 'ru_RU',
+        comfortableWeeklyCapacityHours: capacity,
+        assumePastPayoutsPaid: _assumePastPayoutsPaid,
       );
 
       await ref.read(settingsRepositoryProvider).saveSettings(settings);
@@ -227,12 +268,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (mounted) {
         setState(() {
           _connectionStatus = ConnectionStatus.success(
-            'Connected. Imported ${result.importedProjects} projects.',
+            'Подключено. Импортировано проектов: ${result.importedProjects}.',
           );
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Projects imported: ${result.importedProjects}'),
+            content: Text('Импортировано проектов: ${result.importedProjects}'),
           ),
         );
         context.go(ProjectsScreen.routePath);
@@ -253,7 +294,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   String _connectionErrorMessage(Object error) {
     if (error is KimaiEmptyProjectsException) {
-      return 'Connected, but Kimai returned no projects.';
+      return 'Подключение выполнено, но Kimai не вернул проекты.';
     }
 
     if (error is KimaiApiException) {
@@ -263,22 +304,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (error is DioException) {
       final statusCode = error.response?.statusCode;
       if (statusCode == 401 || statusCode == 403) {
-        return 'Unauthorized Kimai token.';
+        return 'Токен Kimai не принят.';
       }
 
       if (error.type == DioExceptionType.connectionTimeout ||
           error.type == DioExceptionType.receiveTimeout ||
           error.type == DioExceptionType.sendTimeout ||
           error.type == DioExceptionType.connectionError) {
-        return 'Kimai is unreachable. Check the URL and network connection.';
+        return 'Kimai недоступен. Проверьте адрес и подключение.';
       }
 
       if (statusCode != null) {
-        return 'Kimai returned HTTP $statusCode.';
+        return 'Kimai вернул HTTP $statusCode.';
       }
     }
 
-    return 'Connection failed: $error';
+    return 'Не удалось подключиться: $error';
   }
 
   Future<void> _runFullTimesheetSync() async {
@@ -286,13 +327,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await ref.read(syncControllerProvider.notifier).runFullSync();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Last year sync completed')),
+          const SnackBar(content: Text('Синхронизация за год завершена')),
         );
       }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Sync failed: $error')),
+          SnackBar(content: Text('Ошибка синхронизации: $error')),
         );
       }
     }
@@ -316,7 +357,10 @@ class SyncProgressBlock extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Sync progress', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'Ход синхронизации',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: 8),
           if (syncState.isSyncing) ...[
             LinearProgressIndicator(
@@ -342,12 +386,12 @@ class SyncProgressBlock extends StatelessWidget {
                 );
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Last error copied')),
+                    const SnackBar(content: Text('Ошибка скопирована')),
                   );
                 }
               },
               icon: const Icon(Icons.copy_rounded, size: 18),
-              label: const Text('Copy last error'),
+              label: const Text('Скопировать ошибку'),
             ),
           ],
         ],
@@ -367,21 +411,24 @@ class DataSafetyPanel extends ConsumerWidget {
         runSpacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Text('Data safety', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'Безопасность данных',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           OutlinedButton.icon(
             onPressed: () => _exportBackup(context, ref),
             icon: const Icon(Icons.ios_share_rounded, size: 18),
-            label: const Text('Export settings JSON'),
+            label: const Text('Экспорт настроек JSON'),
           ),
           OutlinedButton.icon(
             onPressed: () => _importBackup(context, ref),
             icon: const Icon(Icons.file_download_rounded, size: 18),
-            label: const Text('Import settings JSON'),
+            label: const Text('Импорт настроек JSON'),
           ),
           OutlinedButton.icon(
             onPressed: () => _clearSettings(context, ref),
             icon: const Icon(Icons.delete_outline_rounded, size: 18),
-            label: const Text('Clear settings/token'),
+            label: const Text('Очистить настройки и токен'),
           ),
         ],
       ),
@@ -398,7 +445,7 @@ class DataSafetyPanel extends ConsumerWidget {
     );
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Settings backup copied')),
+        const SnackBar(content: Text('Резервная копия настроек скопирована')),
       );
     }
   }
@@ -408,7 +455,7 @@ class DataSafetyPanel extends ConsumerWidget {
     final jsonText = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Import settings backup'),
+        title: const Text('Импорт настроек'),
         content: TextField(
           controller: controller,
           maxLines: 8,
@@ -417,11 +464,11 @@ class DataSafetyPanel extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+            child: const Text('Отмена'),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(controller.text),
-            child: const Text('Import'),
+            child: const Text('Импортировать'),
           ),
         ],
       ),
@@ -433,7 +480,7 @@ class DataSafetyPanel extends ConsumerWidget {
 
     final decoded = jsonDecode(jsonText);
     if (decoded is! Map<String, Object?>) {
-      throw const FormatException('Backup must be a JSON object.');
+      throw const FormatException('Резервная копия должна быть JSON-объектом.');
     }
     await ref.read(settingsRepositoryProvider).importSettingsBackup(decoded);
     ref.invalidate(appSettingsProvider);
@@ -444,18 +491,18 @@ class DataSafetyPanel extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Clear local settings?'),
+        title: const Text('Очистить настройки?'),
         content: const Text(
-          'Kimai URL, onboarding state and API token will be removed.',
+          'Адрес Kimai, состояние onboarding и API-токен будут удалены.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: const Text('Отмена'),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Clear'),
+            child: const Text('Очистить'),
           ),
         ],
       ),
@@ -481,23 +528,23 @@ class ConnectionStatus {
 
   const ConnectionStatus.idle()
       : this._(
-          label: 'Not connected',
-          message: 'Save your Kimai URL and token, then connect.',
+          label: 'Не подключено',
+          message: 'Сохраните адрес Kimai и токен, затем подключитесь.',
           color: AppColors.textMuted,
           icon: Icons.radio_button_unchecked_rounded,
         );
 
   const ConnectionStatus.connecting()
       : this._(
-          label: 'Connecting',
-          message: 'Checking Kimai and importing projects.',
+          label: 'Подключение',
+          message: 'Проверяем Kimai и импортируем проекты.',
           color: AppColors.warning,
           icon: Icons.sync_rounded,
         );
 
   const ConnectionStatus.success(String message)
       : this._(
-          label: 'Connected',
+          label: 'Подключено',
           message: message,
           color: AppColors.accent,
           icon: Icons.check_circle_rounded,
@@ -505,7 +552,7 @@ class ConnectionStatus {
 
   const ConnectionStatus.failure(String message)
       : this._(
-          label: 'Connection failed',
+          label: 'Ошибка подключения',
           message: message,
           color: AppColors.danger,
           icon: Icons.error_rounded,
@@ -567,8 +614,8 @@ class LastSyncStatusBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     if (log == null) {
       return const EmptyState(
-        title: 'No sync history',
-        message: 'Last sync status will appear after the first Kimai connect.',
+        title: 'Истории синхронизаций пока нет',
+        message: 'Статус появится после первого подключения Kimai.',
       );
     }
 
@@ -587,18 +634,18 @@ class LastSyncStatusBlock extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Last sync',
+                  'Последняя синхронизация',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 6),
                 Text(message, style: Theme.of(context).textTheme.bodyMedium),
                 const SizedBox(height: 8),
                 Text(
-                  'Full: ${_formatSyncDate(lastFullSyncAt)}',
+                  'Полная: ${_formatSyncDate(lastFullSyncAt)}',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 Text(
-                  'Incremental: ${_formatSyncDate(lastIncrementalSyncAt)}',
+                  'Последние 7 дней: ${_formatSyncDate(lastIncrementalSyncAt)}',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ],
@@ -611,7 +658,7 @@ class LastSyncStatusBlock extends StatelessWidget {
 
   String _formatSyncDate(DateTime? value) {
     if (value == null) {
-      return 'Never';
+      return 'Никогда';
     }
 
     return '${DateTimeFormats.date.format(value)} ${DateTimeFormats.time.format(value)}';

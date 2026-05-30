@@ -20,30 +20,30 @@ class DiagnosticsScreen extends ConsumerWidget {
     final diagnostics = ref.watch(_diagnosticsProvider);
 
     return AppScreen(
-      title: 'Diagnostics',
-      subtitle: 'Local app and database state for support/debugging.',
+      title: 'Диагностика',
+      subtitle: 'Состояние приложения и история синхронизаций для поддержки.',
       children: [
         diagnostics.when(
           data: (data) => AppPanel(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _Row(label: 'App version', value: _appVersion),
-                _Row(label: 'DB schema version', value: data.schemaVersion),
-                _Row(label: 'Kimai base URL', value: data.baseUrl),
+                _Row(label: 'Версия приложения', value: _appVersion),
+                _Row(label: 'Версия данных', value: data.schemaVersion),
+                _Row(label: 'Адрес Kimai', value: data.baseUrl),
                 _Row(
-                  label: 'Enabled projects',
+                  label: 'Включённые проекты',
                   value: data.enabledProjects.toString(),
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Last sync logs',
+                  'Последние синхронизации',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 8),
                 if (data.logs.isEmpty)
                   Text(
-                    'No sync logs yet.',
+                    'Истории синхронизаций пока нет.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   )
                 else
@@ -97,7 +97,7 @@ class DiagnosticsScreen extends ConsumerWidget {
                           }
                         },
                         icon: const Icon(Icons.copy_rounded, size: 18),
-                        label: const Text('Copy last error'),
+                        label: const Text('Скопировать последнюю ошибку'),
                       ),
                     if (data.lastSyncDebugReport != null)
                       OutlinedButton.icon(
@@ -114,7 +114,7 @@ class DiagnosticsScreen extends ConsumerWidget {
                           }
                         },
                         icon: const Icon(Icons.copy_rounded, size: 18),
-                        label: const Text('Copy last sync debug report'),
+                        label: const Text('Скопировать отчёт синхронизации'),
                       ),
                     OutlinedButton.icon(
                       onPressed: () async {
@@ -130,7 +130,7 @@ class DiagnosticsScreen extends ConsumerWidget {
                         }
                       },
                       icon: const Icon(Icons.copy_rounded, size: 18),
-                      label: const Text('Copy diagnostic report'),
+                      label: const Text('Скопировать отчёт диагностики'),
                     ),
                   ],
                 ),
@@ -139,7 +139,7 @@ class DiagnosticsScreen extends ConsumerWidget {
           ),
           loading: () => const LinearProgressIndicator(),
           error: (error, stackTrace) => EmptyState(
-            title: 'Diagnostics unavailable',
+            title: 'Диагностика недоступна',
             message: error.toString(),
           ),
         ),

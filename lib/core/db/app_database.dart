@@ -54,6 +54,7 @@ class AppProjects extends Table {
   RealColumn get weeklyGoalHours => real().nullable()();
   TextColumn get currency => text().withDefault(const Constant('RUB'))();
   TextColumn get payoutRule => text().withDefault(const Constant('none'))();
+  DateTimeColumn get payoutAnchorDate => dateTime().nullable()();
   BoolColumn get archived => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
@@ -161,7 +162,7 @@ class AppDatabase extends _$AppDatabase {
         );
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -184,6 +185,9 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 6) {
             await m.createTable(payments);
+          }
+          if (from < 7) {
+            await m.addColumn(appProjects, appProjects.payoutAnchorDate);
           }
         },
       );

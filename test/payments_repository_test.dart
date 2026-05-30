@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:outstaff_tracker/core/db/app_database.dart';
 import 'package:outstaff_tracker/features/payments/data/payments_repository.dart';
 import 'package:outstaff_tracker/features/projects/data/projects_repository.dart';
+import 'package:outstaff_tracker/features/timesheets/data/timesheets_repository.dart';
 
 void main() {
   late AppDatabase database;
@@ -95,5 +96,45 @@ void main() {
 
     final after = await payments.getPayments();
     expect(after.expected, isEmpty);
+  });
+
+  test('anchor date change recalculates payout period', () {
+    final periods = buildPayoutPeriods(
+      rule: PayoutRule.biweekly.storageValue,
+      anchorDate: DateTime(2026, 5, 15),
+      from: DateTime(2026, 5, 1),
+      to: DateTime(2026, 6, 1),
+      customDates: const [],
+    );
+
+    expect(periods.first.payoutDate, DateTime(2026, 5, 15));
+    expect(periods.first.start, DateTime(2026, 5, 1));
+    expect(periods[1].payoutDate, DateTime(2026, 5, 29));
+  });
+
+  test('hourly rate change recalculates saved timesheet amount', () async {
+    await projects.updateProjectSettings(
+      appProjectId: 'kimai_1',
+      hourlyRate: 200,
+      hourlyRateMinor: 20000,
+    );
+
+    final row = await (database.select(database.timesheets)
+          ..where((table) => table.id.equals(10)))
+        .getSingle();
+
+    expect(row.amountMinor, 20000);
+  });
+
+  test('weekly goal change updates progress history', () async {
+    await projects.updateProjectSettings(
+      appProjectId: 'kimai_1',
+      weeklyGoalHours: 10,
+    );
+
+    final history =
+        await TimesheetsRepository(database).getWeeklyProgressHistory(weeks: 1);
+
+    expect(history.single.goalSeconds, 36000);
   });
 }

@@ -1170,6 +1170,12 @@ class $AppProjectsTable extends AppProjects
       type: DriftSqlType.string,
       requiredDuringInsert: false,
       defaultValue: const Constant('none'));
+  static const VerificationMeta _payoutAnchorDateMeta =
+      const VerificationMeta('payoutAnchorDate');
+  @override
+  late final GeneratedColumn<DateTime> payoutAnchorDate =
+      GeneratedColumn<DateTime>('payout_anchor_date', aliasedName, true,
+          type: DriftSqlType.dateTime, requiredDuringInsert: false);
   static const VerificationMeta _archivedMeta =
       const VerificationMeta('archived');
   @override
@@ -1204,6 +1210,7 @@ class $AppProjectsTable extends AppProjects
         weeklyGoalHours,
         currency,
         payoutRule,
+        payoutAnchorDate,
         archived,
         createdAt,
         updatedAt
@@ -1271,6 +1278,12 @@ class $AppProjectsTable extends AppProjects
           payoutRule.isAcceptableOrUnknown(
               data['payout_rule']!, _payoutRuleMeta));
     }
+    if (data.containsKey('payout_anchor_date')) {
+      context.handle(
+          _payoutAnchorDateMeta,
+          payoutAnchorDate.isAcceptableOrUnknown(
+              data['payout_anchor_date']!, _payoutAnchorDateMeta));
+    }
     if (data.containsKey('archived')) {
       context.handle(_archivedMeta,
           archived.isAcceptableOrUnknown(data['archived']!, _archivedMeta));
@@ -1316,6 +1329,8 @@ class $AppProjectsTable extends AppProjects
           .read(DriftSqlType.string, data['${effectivePrefix}currency'])!,
       payoutRule: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}payout_rule'])!,
+      payoutAnchorDate: attachedDatabase.typeMapping.read(
+          DriftSqlType.dateTime, data['${effectivePrefix}payout_anchor_date']),
       archived: attachedDatabase.typeMapping
           .read(DriftSqlType.bool, data['${effectivePrefix}archived'])!,
       createdAt: attachedDatabase.typeMapping
@@ -1342,6 +1357,7 @@ class AppProject extends DataClass implements Insertable<AppProject> {
   final double? weeklyGoalHours;
   final String currency;
   final String payoutRule;
+  final DateTime? payoutAnchorDate;
   final bool archived;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -1356,6 +1372,7 @@ class AppProject extends DataClass implements Insertable<AppProject> {
       this.weeklyGoalHours,
       required this.currency,
       required this.payoutRule,
+      this.payoutAnchorDate,
       required this.archived,
       required this.createdAt,
       required this.updatedAt});
@@ -1382,6 +1399,9 @@ class AppProject extends DataClass implements Insertable<AppProject> {
     }
     map['currency'] = Variable<String>(currency);
     map['payout_rule'] = Variable<String>(payoutRule);
+    if (!nullToAbsent || payoutAnchorDate != null) {
+      map['payout_anchor_date'] = Variable<DateTime>(payoutAnchorDate);
+    }
     map['archived'] = Variable<bool>(archived);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -1409,6 +1429,9 @@ class AppProject extends DataClass implements Insertable<AppProject> {
           : Value(weeklyGoalHours),
       currency: Value(currency),
       payoutRule: Value(payoutRule),
+      payoutAnchorDate: payoutAnchorDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(payoutAnchorDate),
       archived: Value(archived),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -1429,6 +1452,8 @@ class AppProject extends DataClass implements Insertable<AppProject> {
       weeklyGoalHours: serializer.fromJson<double?>(json['weeklyGoalHours']),
       currency: serializer.fromJson<String>(json['currency']),
       payoutRule: serializer.fromJson<String>(json['payoutRule']),
+      payoutAnchorDate:
+          serializer.fromJson<DateTime?>(json['payoutAnchorDate']),
       archived: serializer.fromJson<bool>(json['archived']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -1448,6 +1473,7 @@ class AppProject extends DataClass implements Insertable<AppProject> {
       'weeklyGoalHours': serializer.toJson<double?>(weeklyGoalHours),
       'currency': serializer.toJson<String>(currency),
       'payoutRule': serializer.toJson<String>(payoutRule),
+      'payoutAnchorDate': serializer.toJson<DateTime?>(payoutAnchorDate),
       'archived': serializer.toJson<bool>(archived),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -1465,6 +1491,7 @@ class AppProject extends DataClass implements Insertable<AppProject> {
           Value<double?> weeklyGoalHours = const Value.absent(),
           String? currency,
           String? payoutRule,
+          Value<DateTime?> payoutAnchorDate = const Value.absent(),
           bool? archived,
           DateTime? createdAt,
           DateTime? updatedAt}) =>
@@ -1484,6 +1511,9 @@ class AppProject extends DataClass implements Insertable<AppProject> {
             : this.weeklyGoalHours,
         currency: currency ?? this.currency,
         payoutRule: payoutRule ?? this.payoutRule,
+        payoutAnchorDate: payoutAnchorDate.present
+            ? payoutAnchorDate.value
+            : this.payoutAnchorDate,
         archived: archived ?? this.archived,
         createdAt: createdAt ?? this.createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
@@ -1508,6 +1538,9 @@ class AppProject extends DataClass implements Insertable<AppProject> {
       currency: data.currency.present ? data.currency.value : this.currency,
       payoutRule:
           data.payoutRule.present ? data.payoutRule.value : this.payoutRule,
+      payoutAnchorDate: data.payoutAnchorDate.present
+          ? data.payoutAnchorDate.value
+          : this.payoutAnchorDate,
       archived: data.archived.present ? data.archived.value : this.archived,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -1527,6 +1560,7 @@ class AppProject extends DataClass implements Insertable<AppProject> {
           ..write('weeklyGoalHours: $weeklyGoalHours, ')
           ..write('currency: $currency, ')
           ..write('payoutRule: $payoutRule, ')
+          ..write('payoutAnchorDate: $payoutAnchorDate, ')
           ..write('archived: $archived, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
@@ -1546,6 +1580,7 @@ class AppProject extends DataClass implements Insertable<AppProject> {
       weeklyGoalHours,
       currency,
       payoutRule,
+      payoutAnchorDate,
       archived,
       createdAt,
       updatedAt);
@@ -1563,6 +1598,7 @@ class AppProject extends DataClass implements Insertable<AppProject> {
           other.weeklyGoalHours == this.weeklyGoalHours &&
           other.currency == this.currency &&
           other.payoutRule == this.payoutRule &&
+          other.payoutAnchorDate == this.payoutAnchorDate &&
           other.archived == this.archived &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
@@ -1579,6 +1615,7 @@ class AppProjectsCompanion extends UpdateCompanion<AppProject> {
   final Value<double?> weeklyGoalHours;
   final Value<String> currency;
   final Value<String> payoutRule;
+  final Value<DateTime?> payoutAnchorDate;
   final Value<bool> archived;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
@@ -1594,6 +1631,7 @@ class AppProjectsCompanion extends UpdateCompanion<AppProject> {
     this.weeklyGoalHours = const Value.absent(),
     this.currency = const Value.absent(),
     this.payoutRule = const Value.absent(),
+    this.payoutAnchorDate = const Value.absent(),
     this.archived = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -1610,6 +1648,7 @@ class AppProjectsCompanion extends UpdateCompanion<AppProject> {
     this.weeklyGoalHours = const Value.absent(),
     this.currency = const Value.absent(),
     this.payoutRule = const Value.absent(),
+    this.payoutAnchorDate = const Value.absent(),
     this.archived = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
@@ -1629,6 +1668,7 @@ class AppProjectsCompanion extends UpdateCompanion<AppProject> {
     Expression<double>? weeklyGoalHours,
     Expression<String>? currency,
     Expression<String>? payoutRule,
+    Expression<DateTime>? payoutAnchorDate,
     Expression<bool>? archived,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
@@ -1645,6 +1685,7 @@ class AppProjectsCompanion extends UpdateCompanion<AppProject> {
       if (weeklyGoalHours != null) 'weekly_goal_hours': weeklyGoalHours,
       if (currency != null) 'currency': currency,
       if (payoutRule != null) 'payout_rule': payoutRule,
+      if (payoutAnchorDate != null) 'payout_anchor_date': payoutAnchorDate,
       if (archived != null) 'archived': archived,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -1663,6 +1704,7 @@ class AppProjectsCompanion extends UpdateCompanion<AppProject> {
       Value<double?>? weeklyGoalHours,
       Value<String>? currency,
       Value<String>? payoutRule,
+      Value<DateTime?>? payoutAnchorDate,
       Value<bool>? archived,
       Value<DateTime>? createdAt,
       Value<DateTime>? updatedAt,
@@ -1678,6 +1720,7 @@ class AppProjectsCompanion extends UpdateCompanion<AppProject> {
       weeklyGoalHours: weeklyGoalHours ?? this.weeklyGoalHours,
       currency: currency ?? this.currency,
       payoutRule: payoutRule ?? this.payoutRule,
+      payoutAnchorDate: payoutAnchorDate ?? this.payoutAnchorDate,
       archived: archived ?? this.archived,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -1718,6 +1761,9 @@ class AppProjectsCompanion extends UpdateCompanion<AppProject> {
     if (payoutRule.present) {
       map['payout_rule'] = Variable<String>(payoutRule.value);
     }
+    if (payoutAnchorDate.present) {
+      map['payout_anchor_date'] = Variable<DateTime>(payoutAnchorDate.value);
+    }
     if (archived.present) {
       map['archived'] = Variable<bool>(archived.value);
     }
@@ -1746,6 +1792,7 @@ class AppProjectsCompanion extends UpdateCompanion<AppProject> {
           ..write('weeklyGoalHours: $weeklyGoalHours, ')
           ..write('currency: $currency, ')
           ..write('payoutRule: $payoutRule, ')
+          ..write('payoutAnchorDate: $payoutAnchorDate, ')
           ..write('archived: $archived, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -4805,6 +4852,7 @@ typedef $$AppProjectsTableCreateCompanionBuilder = AppProjectsCompanion
   Value<double?> weeklyGoalHours,
   Value<String> currency,
   Value<String> payoutRule,
+  Value<DateTime?> payoutAnchorDate,
   Value<bool> archived,
   required DateTime createdAt,
   required DateTime updatedAt,
@@ -4822,6 +4870,7 @@ typedef $$AppProjectsTableUpdateCompanionBuilder = AppProjectsCompanion
   Value<double?> weeklyGoalHours,
   Value<String> currency,
   Value<String> payoutRule,
+  Value<DateTime?> payoutAnchorDate,
   Value<bool> archived,
   Value<DateTime> createdAt,
   Value<DateTime> updatedAt,
@@ -4916,6 +4965,10 @@ class $$AppProjectsTableFilterComposer
 
   ColumnFilters<String> get payoutRule => $composableBuilder(
       column: $table.payoutRule, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get payoutAnchorDate => $composableBuilder(
+      column: $table.payoutAnchorDate,
+      builder: (column) => ColumnFilters(column));
 
   ColumnFilters<bool> get archived => $composableBuilder(
       column: $table.archived, builder: (column) => ColumnFilters(column));
@@ -5027,6 +5080,10 @@ class $$AppProjectsTableOrderingComposer
   ColumnOrderings<String> get payoutRule => $composableBuilder(
       column: $table.payoutRule, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<DateTime> get payoutAnchorDate => $composableBuilder(
+      column: $table.payoutAnchorDate,
+      builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<bool> get archived => $composableBuilder(
       column: $table.archived, builder: (column) => ColumnOrderings(column));
 
@@ -5092,6 +5149,9 @@ class $$AppProjectsTableAnnotationComposer
 
   GeneratedColumn<String> get payoutRule => $composableBuilder(
       column: $table.payoutRule, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get payoutAnchorDate => $composableBuilder(
+      column: $table.payoutAnchorDate, builder: (column) => column);
 
   GeneratedColumn<bool> get archived =>
       $composableBuilder(column: $table.archived, builder: (column) => column);
@@ -5199,6 +5259,7 @@ class $$AppProjectsTableTableManager extends RootTableManager<
             Value<double?> weeklyGoalHours = const Value.absent(),
             Value<String> currency = const Value.absent(),
             Value<String> payoutRule = const Value.absent(),
+            Value<DateTime?> payoutAnchorDate = const Value.absent(),
             Value<bool> archived = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
             Value<DateTime> updatedAt = const Value.absent(),
@@ -5215,6 +5276,7 @@ class $$AppProjectsTableTableManager extends RootTableManager<
             weeklyGoalHours: weeklyGoalHours,
             currency: currency,
             payoutRule: payoutRule,
+            payoutAnchorDate: payoutAnchorDate,
             archived: archived,
             createdAt: createdAt,
             updatedAt: updatedAt,
@@ -5231,6 +5293,7 @@ class $$AppProjectsTableTableManager extends RootTableManager<
             Value<double?> weeklyGoalHours = const Value.absent(),
             Value<String> currency = const Value.absent(),
             Value<String> payoutRule = const Value.absent(),
+            Value<DateTime?> payoutAnchorDate = const Value.absent(),
             Value<bool> archived = const Value.absent(),
             required DateTime createdAt,
             required DateTime updatedAt,
@@ -5247,6 +5310,7 @@ class $$AppProjectsTableTableManager extends RootTableManager<
             weeklyGoalHours: weeklyGoalHours,
             currency: currency,
             payoutRule: payoutRule,
+            payoutAnchorDate: payoutAnchorDate,
             archived: archived,
             createdAt: createdAt,
             updatedAt: updatedAt,

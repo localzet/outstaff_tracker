@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/db/app_database.dart';
 import '../../../core/theme/app_theme.dart';
@@ -18,15 +17,15 @@ class ProjectsScreen extends ConsumerWidget {
     final projects = ref.watch(projectConfigurationsProvider);
 
     return AppScreen(
-      title: 'Projects',
-      subtitle: 'Imported Kimai projects and local billing settings.',
+      title: 'Проекты',
+      subtitle: 'Проекты Kimai, ставки, цели и правила выплат.',
       children: [
         projects.when(
           data: (items) {
             if (items.isEmpty) {
               return const EmptyState(
-                title: 'No projects yet',
-                message: 'Projects will appear after a successful Kimai sync.',
+                title: 'Проектов пока нет',
+                message: 'Подключите Kimai и импортируйте проекты.',
               );
             }
 
@@ -47,7 +46,7 @@ class ProjectsScreen extends ConsumerWidget {
           },
           loading: () => const LinearProgressIndicator(),
           error: (error, stackTrace) => EmptyState(
-            title: 'Projects are unavailable',
+            title: 'Проекты недоступны',
             message: error.toString(),
           ),
         ),
@@ -123,7 +122,7 @@ class _ProjectConfigurationTileState
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      kimaiProject.customerName ?? 'No customer',
+                      kimaiProject.customerName ?? 'Без клиента',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
@@ -149,7 +148,7 @@ class _ProjectConfigurationTileState
                     decimal: true,
                   ),
                   decoration: const InputDecoration(
-                    labelText: 'Hourly rate',
+                    labelText: 'Ставка',
                     prefixIcon: Icon(Icons.payments_rounded, size: 18),
                   ),
                 ),
@@ -162,8 +161,8 @@ class _ProjectConfigurationTileState
                     decimal: true,
                   ),
                   decoration: const InputDecoration(
-                    labelText: 'Weekly goal',
-                    suffixText: 'h',
+                    labelText: 'Цель в неделю',
+                    suffixText: 'ч',
                     prefixIcon: Icon(Icons.flag_rounded, size: 18),
                   ),
                 ),
@@ -174,7 +173,7 @@ class _ProjectConfigurationTileState
                   initialValue: payoutRule,
                   isExpanded: true,
                   decoration: const InputDecoration(
-                    labelText: 'Payout rule',
+                    labelText: 'Правило выплат',
                     prefixIcon: Icon(Icons.event_repeat_rounded, size: 18),
                   ),
                   items: [
@@ -197,10 +196,24 @@ class _ProjectConfigurationTileState
               IconButton.filledTonal(
                 onPressed: _saveNumericSettings,
                 icon: const Icon(Icons.save_rounded),
-                tooltip: 'Save project settings',
+                tooltip: 'Сохранить настройки проекта',
               ),
             ],
           ),
+          if (payoutRule == PayoutRule.biweekly ||
+              payoutRule == PayoutRule.triweekly ||
+              payoutRule == PayoutRule.monthly) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => _pickAnchorDate(appProject.payoutAnchorDate),
+              icon: const Icon(Icons.event_rounded, size: 18),
+              label: Text(
+                appProject.payoutAnchorDate == null
+                    ? 'Указать дату отсчёта выплат'
+                    : 'Дата отсчёта: ${DateTimeFormats.date.format(appProject.payoutAnchorDate!)}',
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
@@ -221,7 +234,7 @@ class _ProjectConfigurationTileState
                   ),
                 ),
               Text(
-                appProject.color ?? 'Default color',
+                appProject.color ?? 'Цвет по умолчанию',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ],
@@ -260,7 +273,9 @@ class _ProjectConfigurationTileState
     if ((hourlyRateText.isNotEmpty && hourlyRate == null) ||
         (weeklyGoalText.isNotEmpty && weeklyGoal == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter valid positive numbers.')),
+        const SnackBar(
+          content: Text('Введите корректные положительные числа.'),
+        ),
       );
       return;
     }
@@ -268,8 +283,7 @@ class _ProjectConfigurationTileState
         (hourlyRate == null || hourlyRate <= 0)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content:
-              Text('Enabled projects require an hourly rate greater than 0.'),
+          content: Text('Для включённого проекта нужна ставка больше 0.'),
         ),
       );
       return;
@@ -285,7 +299,7 @@ class _ProjectConfigurationTileState
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Project settings saved')),
+        const SnackBar(content: Text('Настройки проекта сохранены')),
       );
     }
   }
@@ -299,12 +313,14 @@ class _ProjectConfigurationTileState
     bool clearWeeklyGoalHours = false,
     String? color,
     PayoutRule? payoutRule,
+    DateTime? payoutAnchorDate,
+    bool clearPayoutAnchorDate = false,
   }) {
     if (enabled == true &&
         widget.configuration.appProject.hourlyRateMinor == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Set an hourly rate greater than 0 before enabling.'),
+          content: Text('Перед включением укажите ставку больше 0.'),
         ),
       );
       return Future<void>.value();
@@ -320,7 +336,25 @@ class _ProjectConfigurationTileState
           clearWeeklyGoalHours: clearWeeklyGoalHours,
           color: color,
           payoutRule: payoutRule,
+          payoutAnchorDate: payoutAnchorDate,
+          clearPayoutAnchorDate: clearPayoutAnchorDate,
         );
+  }
+
+  Future<void> _pickAnchorDate(DateTime? current) async {
+    final selected = await showDatePicker(
+      context: context,
+      firstDate: DateTime.now().subtract(const Duration(days: 3650)),
+      lastDate: DateTime.now().add(const Duration(days: 3650)),
+      initialDate: current ?? DateTime.now(),
+    );
+    if (selected == null) {
+      return;
+    }
+
+    await _update(
+      payoutAnchorDate: DateTime(selected.year, selected.month, selected.day),
+    );
   }
 
   double? _parsePositiveDouble(String value) {
@@ -349,8 +383,6 @@ class CustomPayoutDatesBlock extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final moneyFormat = NumberFormat.simpleCurrency(name: 'RUB');
-
     return DecoratedBox(
       decoration: BoxDecoration(
         color: AppColors.surfaceElevated,
@@ -366,20 +398,20 @@ class CustomPayoutDatesBlock extends ConsumerWidget {
               children: [
                 Expanded(
                   child: Text(
-                    'Custom payout dates',
+                    'Свои даты выплат',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
                 TextButton.icon(
                   onPressed: () => _addDate(context, ref),
                   icon: const Icon(Icons.add_rounded, size: 18),
-                  label: const Text('Add'),
+                  label: const Text('Добавить'),
                 ),
               ],
             ),
             if (dates.isEmpty)
               Text(
-                'No custom payout dates configured.',
+                'Свои даты выплат не настроены.',
                 style: Theme.of(context).textTheme.bodyMedium,
               )
             else
@@ -394,13 +426,17 @@ class CustomPayoutDatesBlock extends ConsumerWidget {
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       if (date.expectedAmount != null)
-                        Text(moneyFormat.format(date.expectedAmount)),
+                        Text(
+                          formatMoneyRub(
+                            (date.expectedAmount! * 100).round(),
+                          ),
+                        ),
                       IconButton(
                         onPressed: () => ref
                             .read(projectsRepositoryProvider)
                             .deleteCustomPayoutDate(date.id),
                         icon: const Icon(Icons.delete_outline_rounded),
-                        tooltip: 'Delete payout date',
+                        tooltip: 'Удалить дату выплаты',
                       ),
                     ],
                   ),

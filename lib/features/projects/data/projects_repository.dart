@@ -20,11 +20,11 @@ enum PayoutRule {
       };
 
   String get label => switch (this) {
-        PayoutRule.none => 'None',
-        PayoutRule.biweekly => 'Biweekly',
-        PayoutRule.triweekly => 'Triweekly',
-        PayoutRule.monthly => 'Monthly',
-        PayoutRule.customDates => 'Custom dates',
+        PayoutRule.none => 'Без выплат',
+        PayoutRule.biweekly => 'Раз в 2 недели',
+        PayoutRule.triweekly => 'Раз в 3 недели',
+        PayoutRule.monthly => 'Ежемесячно',
+        PayoutRule.customDates => 'Свои даты',
       };
 
   static PayoutRule fromStorage(String value) {
@@ -206,36 +206,78 @@ class ProjectsRepository {
     bool clearWeeklyGoalHours = false,
     String? color,
     PayoutRule? payoutRule,
-  }) {
+    DateTime? payoutAnchorDate,
+    bool clearPayoutAnchorDate = false,
+  }) async {
     final now = DateTime.now().toUtc();
 
-    return (_database.update(_database.appProjects)
-          ..where((table) => table.id.equals(appProjectId)))
-        .write(
-      AppProjectsCompanion(
-        enabled: enabled == null ? const Value.absent() : Value(enabled),
-        hourlyRate: clearHourlyRate
-            ? const Value<double?>(null)
-            : hourlyRate == null
-                ? const Value.absent()
-                : Value(hourlyRate),
-        hourlyRateMinor: clearHourlyRate
-            ? const Value<int?>(null)
-            : hourlyRateMinor == null
-                ? const Value.absent()
-                : Value(hourlyRateMinor),
-        weeklyGoalHours: clearWeeklyGoalHours
-            ? const Value<double?>(null)
-            : weeklyGoalHours == null
-                ? const Value.absent()
-                : Value(weeklyGoalHours),
-        color: color == null ? const Value.absent() : Value(color),
-        payoutRule: payoutRule == null
-            ? const Value.absent()
-            : Value(payoutRule.storageValue),
-        updatedAt: Value(now),
-      ),
-    );
+    await _database.transaction(() async {
+      await (_database.update(_database.appProjects)
+            ..where((table) => table.id.equals(appProjectId)))
+          .write(
+        AppProjectsCompanion(
+          enabled: enabled == null ? const Value.absent() : Value(enabled),
+          hourlyRate: clearHourlyRate
+              ? const Value<double?>(null)
+              : hourlyRate == null
+                  ? const Value.absent()
+                  : Value(hourlyRate),
+          hourlyRateMinor: clearHourlyRate
+              ? const Value<int?>(null)
+              : hourlyRateMinor == null
+                  ? const Value.absent()
+                  : Value(hourlyRateMinor),
+          weeklyGoalHours: clearWeeklyGoalHours
+              ? const Value<double?>(null)
+              : weeklyGoalHours == null
+                  ? const Value.absent()
+                  : Value(weeklyGoalHours),
+          color: color == null ? const Value.absent() : Value(color),
+          payoutRule: payoutRule == null
+              ? const Value.absent()
+              : Value(payoutRule.storageValue),
+          payoutAnchorDate: clearPayoutAnchorDate
+              ? const Value<DateTime?>(null)
+              : payoutAnchorDate == null
+                  ? const Value.absent()
+                  : Value(payoutAnchorDate),
+          updatedAt: Value(now),
+        ),
+      );
+
+      if (clearHourlyRate || hourlyRateMinor != null) {
+        await _recalculateTimesheetAmounts(
+          appProjectId: appProjectId,
+          hourlyRateMinor: clearHourlyRate ? null : hourlyRateMinor,
+        );
+      }
+    });
+  }
+
+  Future<void> _recalculateTimesheetAmounts({
+    required String appProjectId,
+    required int? hourlyRateMinor,
+  }) async {
+    final rows = await (_database.select(_database.timesheets)
+          ..where((table) => table.appProjectId.equals(appProjectId)))
+        .get();
+
+    await _database.batch((batch) {
+      for (final row in rows) {
+        batch.update(
+          _database.timesheets,
+          TimesheetsCompanion(
+            amountMinor: Value(
+              hourlyRateMinor == null
+                  ? null
+                  : (row.durationSeconds * hourlyRateMinor / 3600).round(),
+            ),
+            currency: const Value('RUB'),
+          ),
+          where: (table) => table.id.equals(row.id),
+        );
+      }
+    });
   }
 }
 

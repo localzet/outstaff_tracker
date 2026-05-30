@@ -1,25 +1,34 @@
+import 'dart:math' as math;
+
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/app_database.dart';
 import '../../projects/data/projects_repository.dart';
+import '../../settings/data/settings_repository.dart';
 
 enum PaymentStatus {
   expected,
+  overdue,
   paid,
+  assumedPaid,
   skipped,
   disputed;
 
   String get storageValue => switch (this) {
         PaymentStatus.expected => 'expected',
+        PaymentStatus.overdue => 'overdue',
         PaymentStatus.paid => 'paid',
+        PaymentStatus.assumedPaid => 'assumed_paid',
         PaymentStatus.skipped => 'skipped',
         PaymentStatus.disputed => 'disputed',
       };
 
   String get label => switch (this) {
         PaymentStatus.expected => 'Ожидается',
+        PaymentStatus.overdue => 'Просрочено',
         PaymentStatus.paid => 'Оплачено',
+        PaymentStatus.assumedPaid => 'Предположительно оплачено',
         PaymentStatus.skipped => 'Пропущено',
         PaymentStatus.disputed => 'Спорно',
       };
@@ -42,7 +51,9 @@ class PaymentItem {
     required this.periodStart,
     required this.periodEnd,
     required this.expectedAmountMinor,
+    required this.trackedSeconds,
     required this.status,
+    required this.isActivePeriod,
     this.actualAmountMinor,
     this.paidAt,
     this.note,
@@ -56,30 +67,96 @@ class PaymentItem {
   final DateTime periodStart;
   final DateTime periodEnd;
   final int expectedAmountMinor;
+  final int trackedSeconds;
   final PaymentStatus status;
+  final bool isActivePeriod;
   final int? actualAmountMinor;
   final DateTime? paidAt;
   final String? note;
+
+  bool get isMeaningfulUpcoming {
+    return (status == PaymentStatus.expected ||
+            status == PaymentStatus.overdue) &&
+        (expectedAmountMinor > 0 || isActivePeriod);
+  }
+}
+
+class PaymentPeriodProgress {
+  const PaymentPeriodProgress({
+    required this.projectName,
+    required this.color,
+    required this.periodStart,
+    required this.periodEnd,
+    required this.payoutDate,
+    required this.requiredSeconds,
+    required this.trackedSeconds,
+    required this.expectedAmountMinor,
+  });
+
+  final String projectName;
+  final String? color;
+  final DateTime periodStart;
+  final DateTime periodEnd;
+  final DateTime payoutDate;
+  final int requiredSeconds;
+  final int trackedSeconds;
+  final int expectedAmountMinor;
+
+  int get balanceSeconds => trackedSeconds - requiredSeconds;
 }
 
 class PaymentsSnapshot {
   const PaymentsSnapshot({
+    required this.all,
     required this.expected,
+    required this.overdue,
     required this.paid,
+    required this.assumedPaid,
     required this.problematic,
+    required this.periodProgress,
   });
 
+  final List<PaymentItem> all;
   final List<PaymentItem> expected;
+  final List<PaymentItem> overdue;
   final List<PaymentItem> paid;
+  final List<PaymentItem> assumedPaid;
   final List<PaymentItem> problematic;
+  final List<PaymentPeriodProgress> periodProgress;
 
-  List<PaymentItem> get nextExpected => expected.take(3).toList();
+  List<PaymentItem> get nextExpected {
+    final items = [...overdue, ...expected]
+      ..sort((a, b) => a.payoutDate.compareTo(b.payoutDate));
+
+    return items.where((item) => item.isMeaningfulUpcoming).take(3).toList();
+  }
+}
+
+class PaymentPeriod {
+  const PaymentPeriod({
+    required this.start,
+    required this.end,
+    required this.payoutDate,
+  });
+
+  final DateTime start;
+  final DateTime end;
+  final DateTime payoutDate;
+
+  bool contains(DateTime day) {
+    final value = _dateOnly(day);
+    return !value.isBefore(start) && value.isBefore(end);
+  }
 }
 
 class PaymentsRepository {
-  PaymentsRepository(this._database);
+  PaymentsRepository(
+    this._database, {
+    SettingsRepository? settingsRepository,
+  }) : _settingsRepository = settingsRepository;
 
   final AppDatabase _database;
+  final SettingsRepository? _settingsRepository;
 
   Stream<PaymentsSnapshot> watchPayments() {
     return _database
@@ -87,12 +164,14 @@ class PaymentsRepository {
           'SELECT COUNT(*) AS c FROM app_projects '
           'UNION ALL SELECT COUNT(*) FROM payout_dates '
           'UNION ALL SELECT COUNT(*) FROM timesheets '
-          'UNION ALL SELECT COUNT(*) FROM payments',
+          'UNION ALL SELECT COUNT(*) FROM payments '
+          'UNION ALL SELECT COUNT(*) FROM sync_state',
           readsFrom: {
             _database.appProjects,
             _database.payoutDates,
             _database.timesheets,
             _database.payments,
+            _database.syncState,
           },
         )
         .watch()
@@ -100,23 +179,33 @@ class PaymentsRepository {
   }
 
   Future<PaymentsSnapshot> getPayments() async {
-    final generated = await _generateExpectedPayments();
+    final generated = await _generatePayments();
     final stored = await _storedPaymentItems();
-    final byId = {for (final item in generated) item.id: item};
+    final byId = {for (final item in generated.items) item.id: item};
 
     for (final item in stored) {
-      byId[item.id] = item;
+      byId[item.id] = _mergeStoredWithGenerated(
+        stored: item,
+        generated: byId[item.id],
+      );
     }
 
     final all = byId.values.toList()
       ..sort((a, b) => a.payoutDate.compareTo(b.payoutDate));
 
     return PaymentsSnapshot(
+      all: all,
       expected: all
           .where((item) => item.status == PaymentStatus.expected)
           .toList(growable: false),
+      overdue: all
+          .where((item) => item.status == PaymentStatus.overdue)
+          .toList(growable: false),
       paid: all
           .where((item) => item.status == PaymentStatus.paid)
+          .toList(growable: false),
+      assumedPaid: all
+          .where((item) => item.status == PaymentStatus.assumedPaid)
           .toList(growable: false),
       problematic: all
           .where(
@@ -125,6 +214,7 @@ class PaymentsRepository {
                 item.status == PaymentStatus.disputed,
           )
           .toList(growable: false),
+      periodProgress: generated.periodProgress,
     );
   }
 
@@ -141,6 +231,27 @@ class PaymentsRepository {
       paidAt: paidAt ?? DateTime.now(),
       note: note,
     );
+  }
+
+  Future<void> markPastPayoutsAssumedPaid() async {
+    final snapshot = await getPayments();
+    final today = _today();
+    final candidates = snapshot.all.where(
+      (item) =>
+          item.payoutDate.isBefore(today) &&
+          item.expectedAmountMinor > 0 &&
+          (item.status == PaymentStatus.expected ||
+              item.status == PaymentStatus.overdue),
+    );
+
+    for (final item in candidates) {
+      await _upsertPayment(
+        item,
+        status: PaymentStatus.assumedPaid,
+        actualAmountMinor: item.expectedAmountMinor,
+        paidAt: item.payoutDate,
+      );
+    }
   }
 
   Future<void> updatePayment(
@@ -191,20 +302,21 @@ class PaymentsRepository {
         );
   }
 
-  Future<List<PaymentItem>> _generateExpectedPayments() async {
-    final rows = await _database.select(_database.appProjects).join([
-      innerJoin(
-        _database.kimaiProjects,
-        _database.kimaiProjects.id
-            .equalsExp(_database.appProjects.kimaiProjectId),
-      ),
-    ]).get();
+  Future<
+      ({
+        List<PaymentItem> items,
+        List<PaymentPeriodProgress> periodProgress
+      })> _generatePayments() async {
+    final rows = await _projectRows();
     final customDates = await _database.select(_database.payoutDates).get();
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final beginWindow = DateTime(today.year, today.month - 3, 1);
-    final endWindow = DateTime(today.year, today.month + 6, 1);
+    final settings =
+        await (_settingsRepository ?? SettingsRepository(_database))
+            .loadSettings();
+    final today = _today();
+    final beginWindow = today.subtract(const Duration(days: 90));
+    final endWindow = today.add(const Duration(days: 75));
     final result = <PaymentItem>[];
+    final progress = <PaymentPeriodProgress>[];
 
     for (final row in rows) {
       final appProject = row.readTable(_database.appProjects);
@@ -215,8 +327,9 @@ class PaymentsRepository {
         continue;
       }
 
-      final periods = _buildPeriods(
+      final periods = buildPayoutPeriods(
         rule: appProject.payoutRule,
+        anchorDate: appProject.payoutAnchorDate,
         from: beginWindow,
         to: endWindow,
         customDates: customDates
@@ -226,31 +339,75 @@ class PaymentsRepository {
       );
 
       for (final period in periods) {
-        final amount = await _amountForPeriod(
+        final isActive = period.contains(today);
+        final calculationEnd =
+            period.end.isAfter(today.add(const Duration(days: 1)))
+                ? today.add(const Duration(days: 1))
+                : period.end;
+        final totals = await _totalsForPeriod(
           appProject.id,
           period.start,
-          period.end,
+          calculationEnd,
         );
-        if (amount == 0 && period.payoutDate.isBefore(today)) {
+        final amount = totals.amountMinor;
+        final status = _generatedStatus(
+          payoutDate: period.payoutDate,
+          amountMinor: amount,
+          today: today,
+          assumePastPaid: settings.assumePastPayoutsPaid,
+        );
+
+        if (_shouldHideGeneratedPayment(
+          amountMinor: amount,
+          period: period,
+          today: today,
+        )) {
           continue;
         }
-        result.add(
-          PaymentItem(
-            id: _paymentId(kimaiProject.id, period.payoutDate),
-            kimaiProjectId: kimaiProject.id,
-            projectName: kimaiProject.name,
-            color: appProject.color ?? kimaiProject.color,
-            payoutDate: period.payoutDate,
-            periodStart: period.start,
-            periodEnd: period.end,
-            expectedAmountMinor: amount,
-            status: PaymentStatus.expected,
-          ),
+
+        final item = PaymentItem(
+          id: _paymentId(kimaiProject.id, period.payoutDate),
+          kimaiProjectId: kimaiProject.id,
+          projectName: kimaiProject.name,
+          color: appProject.color ?? kimaiProject.color,
+          payoutDate: period.payoutDate,
+          periodStart: period.start,
+          periodEnd: period.end,
+          expectedAmountMinor: amount,
+          trackedSeconds: totals.seconds,
+          status: status,
+          isActivePeriod: isActive,
+          actualAmountMinor:
+              status == PaymentStatus.assumedPaid ? amount : null,
+          paidAt:
+              status == PaymentStatus.assumedPaid ? period.payoutDate : null,
         );
+        result.add(item);
+
+        if (isActive) {
+          final weeks = math.max(
+            1,
+            (period.end.difference(period.start).inDays / 7).ceil(),
+          );
+          progress.add(
+            PaymentPeriodProgress(
+              projectName: kimaiProject.name,
+              color: appProject.color ?? kimaiProject.color,
+              periodStart: period.start,
+              periodEnd: period.end,
+              payoutDate: period.payoutDate,
+              requiredSeconds:
+                  ((appProject.weeklyGoalHours ?? 0) * weeks * 3600).round(),
+              trackedSeconds: totals.seconds,
+              expectedAmountMinor: amount,
+            ),
+          );
+        }
       }
     }
 
-    return result;
+    progress.sort((a, b) => a.payoutDate.compareTo(b.payoutDate));
+    return (items: result, periodProgress: progress);
   }
 
   Future<List<PaymentItem>> _storedPaymentItems() async {
@@ -290,66 +447,189 @@ class PaymentsRepository {
       periodStart: payment.periodStart,
       periodEnd: payment.periodEnd,
       expectedAmountMinor: payment.expectedAmountMinor,
+      trackedSeconds: 0,
       actualAmountMinor: payment.actualAmountMinor,
       status: PaymentStatus.fromStorage(payment.status),
       paidAt: payment.paidAt,
       note: payment.note,
+      isActivePeriod: false,
     );
   }
 
-  Future<int> _amountForPeriod(
+  PaymentItem _mergeStoredWithGenerated({
+    required PaymentItem stored,
+    required PaymentItem? generated,
+  }) {
+    if (generated == null) {
+      return stored;
+    }
+
+    return PaymentItem(
+      id: stored.id,
+      kimaiProjectId: stored.kimaiProjectId,
+      projectName: generated.projectName,
+      color: generated.color,
+      payoutDate: generated.payoutDate,
+      periodStart: generated.periodStart,
+      periodEnd: generated.periodEnd,
+      expectedAmountMinor: generated.expectedAmountMinor,
+      trackedSeconds: generated.trackedSeconds,
+      status: stored.status,
+      isActivePeriod: generated.isActivePeriod,
+      actualAmountMinor: stored.actualAmountMinor,
+      paidAt: stored.paidAt,
+      note: stored.note,
+    );
+  }
+
+  Future<({int amountMinor, int seconds})> _totalsForPeriod(
     String appProjectId,
     DateTime begin,
     DateTime end,
   ) async {
+    if (!end.isAfter(begin)) {
+      return (amountMinor: 0, seconds: 0);
+    }
+
     final rows = await (_database.select(_database.timesheets)
           ..where((table) => table.appProjectId.equals(appProjectId))
           ..where((table) => table.beginAt.isBiggerOrEqualValue(begin))
           ..where((table) => table.beginAt.isSmallerThanValue(end)))
         .get();
 
-    return rows.fold<int>(0, (sum, row) => sum + (row.amountMinor ?? 0));
+    return (
+      amountMinor:
+          rows.fold<int>(0, (sum, row) => sum + (row.amountMinor ?? 0)),
+      seconds: rows.fold<int>(0, (sum, row) => sum + row.durationSeconds),
+    );
+  }
+
+  Future<List<TypedResult>> _projectRows() {
+    return _database.select(_database.appProjects).join([
+      innerJoin(
+        _database.kimaiProjects,
+        _database.kimaiProjects.id
+            .equalsExp(_database.appProjects.kimaiProjectId),
+      ),
+    ]).get();
   }
 }
 
-List<({DateTime start, DateTime end, DateTime payoutDate})> _buildPeriods({
+List<PaymentPeriod> buildPayoutPeriods({
   required String rule,
+  required DateTime? anchorDate,
   required DateTime from,
   required DateTime to,
   required List<DateTime> customDates,
 }) {
-  final periods = <({DateTime start, DateTime end, DateTime payoutDate})>[];
+  final periods = <PaymentPeriod>[];
+  final startBoundary = _dateOnly(from);
+  final endBoundary = _dateOnly(to);
+  final anchor = _dateOnly(anchorDate ?? DateTime.now());
+
   if (rule == PayoutRule.customDates.storageValue) {
     final dates = customDates.map(_dateOnly).toList()..sort();
     for (var index = 0; index < dates.length; index++) {
       final payoutDate = dates[index];
+      if (payoutDate.isBefore(startBoundary) ||
+          payoutDate.isAfter(endBoundary)) {
+        continue;
+      }
       final previous = index == 0
           ? payoutDate.subtract(const Duration(days: 30))
           : dates[index - 1];
-      periods.add((start: previous, end: payoutDate, payoutDate: payoutDate));
+      periods.add(
+        PaymentPeriod(start: previous, end: payoutDate, payoutDate: payoutDate),
+      );
     }
     return periods;
   }
 
   if (rule == PayoutRule.monthly.storageValue) {
-    var start = DateTime(from.year, from.month);
-    while (start.isBefore(to)) {
-      final end = DateTime(start.year, start.month + 1);
-      periods.add((start: start, end: end, payoutDate: end));
-      start = end;
+    var payoutDate = _monthlyPayoutDate(anchor, startBoundary);
+    while (payoutDate.isBefore(startBoundary)) {
+      payoutDate = _addMonthsFromAnchor(anchor, payoutDate, 1);
+    }
+
+    while (!payoutDate.isAfter(endBoundary)) {
+      final previous = _addMonthsFromAnchor(anchor, payoutDate, -1);
+      periods.add(
+        PaymentPeriod(start: previous, end: payoutDate, payoutDate: payoutDate),
+      );
+      payoutDate = _addMonthsFromAnchor(anchor, payoutDate, 1);
     }
     return periods;
   }
 
   final step = rule == PayoutRule.triweekly.storageValue ? 21 : 14;
-  var start = _dateOnly(from);
-  while (start.isBefore(to)) {
-    final end = start.add(Duration(days: step));
-    periods.add((start: start, end: end, payoutDate: end));
-    start = end;
+  var payoutDate = anchor;
+  while (payoutDate.isBefore(startBoundary)) {
+    payoutDate = payoutDate.add(Duration(days: step));
+  }
+  while (!payoutDate.isAfter(endBoundary)) {
+    final start = payoutDate.subtract(Duration(days: step));
+    periods.add(
+      PaymentPeriod(start: start, end: payoutDate, payoutDate: payoutDate),
+    );
+    payoutDate = payoutDate.add(Duration(days: step));
   }
 
   return periods;
+}
+
+PaymentStatus _generatedStatus({
+  required DateTime payoutDate,
+  required int amountMinor,
+  required DateTime today,
+  required bool assumePastPaid,
+}) {
+  if (payoutDate.isBefore(today)) {
+    if (assumePastPaid && amountMinor > 0) {
+      return PaymentStatus.assumedPaid;
+    }
+
+    return PaymentStatus.overdue;
+  }
+
+  return PaymentStatus.expected;
+}
+
+bool _shouldHideGeneratedPayment({
+  required int amountMinor,
+  required PaymentPeriod period,
+  required DateTime today,
+}) {
+  if (amountMinor > 0 || period.contains(today)) {
+    return false;
+  }
+
+  return period.payoutDate.isAfter(today);
+}
+
+DateTime _monthlyPayoutDate(DateTime anchor, DateTime boundary) {
+  var date = _sameDayOrMonthEnd(boundary.year, boundary.month, anchor.day);
+  if (date.isBefore(boundary)) {
+    date = _addMonthsFromAnchor(anchor, date, 1);
+  }
+
+  return date;
+}
+
+DateTime _addMonthsFromAnchor(DateTime anchor, DateTime fromDate, int delta) {
+  return _sameDayOrMonthEnd(fromDate.year, fromDate.month + delta, anchor.day);
+}
+
+DateTime _sameDayOrMonthEnd(int year, int month, int day) {
+  final monthStart = DateTime(year, month);
+  final nextMonth = DateTime(monthStart.year, monthStart.month + 1);
+  final lastDay = nextMonth.subtract(const Duration(days: 1)).day;
+
+  return DateTime(monthStart.year, monthStart.month, math.min(day, lastDay));
+}
+
+DateTime _today() {
+  final now = DateTime.now();
+  return DateTime(now.year, now.month, now.day);
 }
 
 DateTime _dateOnly(DateTime value) {
@@ -365,7 +645,10 @@ String _paymentId(int kimaiProjectId, DateTime payoutDate) {
 }
 
 final paymentsRepositoryProvider = Provider<PaymentsRepository>((ref) {
-  return PaymentsRepository(ref.watch(appDatabaseProvider));
+  return PaymentsRepository(
+    ref.watch(appDatabaseProvider),
+    settingsRepository: ref.watch(settingsRepositoryProvider),
+  );
 });
 
 final paymentsSnapshotProvider = StreamProvider<PaymentsSnapshot>((ref) {

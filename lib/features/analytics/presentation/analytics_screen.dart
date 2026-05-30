@@ -1,7 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_time_formats.dart';
@@ -16,11 +15,10 @@ class AnalyticsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final snapshot = ref.watch(analyticsSnapshotProvider);
-    final moneyFormat = NumberFormat.simpleCurrency(name: 'RUB');
 
     return AppScreen(
-      title: 'Analytics',
-      subtitle: 'Local time and payout analytics from synced Kimai data.',
+      title: 'Аналитика',
+      subtitle: 'Ритм работы, доход, цели и распределение по проектам.',
       children: [
         snapshot.when(
           data: (data) {
@@ -29,8 +27,8 @@ class AnalyticsScreen extends ConsumerWidget {
                 data.projectDistribution.isNotEmpty;
             if (!hasData) {
               return const EmptyState(
-                title: 'No analytics yet',
-                message: 'Sync Kimai timesheets to populate local analytics.',
+                title: 'Аналитики пока нет',
+                message: 'Синхронизируйте записи Kimai, чтобы увидеть отчёты.',
               );
             }
 
@@ -40,18 +38,20 @@ class AnalyticsScreen extends ConsumerWidget {
                 ResponsiveGrid(
                   children: [
                     MetricCard(
-                      label: 'Average working day',
-                      value:
-                          '${data.averageWorkingDay.averageHours.toStringAsFixed(1)}h',
-                      detail: '${data.averageWorkingDay.workingDays} work days',
+                      label: 'Средний рабочий день',
+                      value: formatDurationSeconds(
+                        (data.averageWorkingDay.averageHours * 3600).round(),
+                      ),
+                      detail:
+                          '${data.averageWorkingDay.workingDays} рабочих дней',
                     ),
                     MetricCard(
-                      label: 'Best week',
+                      label: 'Лучшая неделя',
                       value: _weekValue(data.bestWeek),
                       detail: data.bestWeek?.label ?? '-',
                     ),
                     MetricCard(
-                      label: 'Worst week',
+                      label: 'Самая тихая неделя',
                       value: _weekValue(data.worstWeek),
                       detail: data.worstWeek?.label ?? '-',
                     ),
@@ -59,22 +59,19 @@ class AnalyticsScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
                 AnalyticsChartPanel(
-                  title: 'Weekly hours · last 12 weeks',
+                  title: 'Часы по неделям · последние 12 недель',
                   child: BarChartWidget(values: data.weeklyHours),
                 ),
                 const SizedBox(height: 16),
                 AnalyticsChartPanel(
-                  title: 'Monthly income · last 6 months',
-                  child: BarChartWidget(
-                    values: data.monthlyIncome,
-                    moneyFormat: moneyFormat,
-                  ),
+                  title: 'Доход по месяцам · последние 6 месяцев',
+                  child: BarChartWidget(values: data.monthlyIncome),
                 ),
                 const SizedBox(height: 16),
                 ResponsiveGrid(
                   children: [
                     AnalyticsChartPanel(
-                      title: 'Project distribution',
+                      title: 'Распределение по проектам',
                       child: ProjectDistributionChart(
                         items: data.projectDistribution,
                       ),
@@ -83,16 +80,13 @@ class AnalyticsScreen extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
-                PayoutForecastPanel(
-                  forecasts: data.payoutForecasts,
-                  moneyFormat: moneyFormat,
-                ),
+                PayoutForecastPanel(forecasts: data.payoutForecasts),
               ],
             );
           },
           loading: () => const LinearProgressIndicator(),
           error: (error, stackTrace) => EmptyState(
-            title: 'Analytics are unavailable',
+            title: 'Аналитика недоступна',
             message: error.toString(),
           ),
         ),
@@ -105,7 +99,7 @@ class AnalyticsScreen extends ConsumerWidget {
       return '-';
     }
 
-    return '${value.value.toStringAsFixed(1)}h';
+    return formatDurationSeconds((value.value * 3600).round());
   }
 }
 
@@ -189,14 +183,9 @@ class AnalyticsChartPanel extends StatelessWidget {
 }
 
 class BarChartWidget extends StatelessWidget {
-  const BarChartWidget({
-    required this.values,
-    this.moneyFormat,
-    super.key,
-  });
+  const BarChartWidget({required this.values, super.key});
 
   final List<PeriodValue> values;
-  final NumberFormat? moneyFormat;
 
   @override
   Widget build(BuildContext context) {
@@ -269,8 +258,8 @@ class ProjectDistributionChart extends StatelessWidget {
   Widget build(BuildContext context) {
     if (items.isEmpty) {
       return const EmptyState(
-        title: 'No project data',
-        message: 'Project distribution appears after sync.',
+        title: 'Нет данных по проектам',
+        message: 'Распределение появится после синхронизации.',
       );
     }
 
@@ -321,13 +310,13 @@ class GoalCompletionPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Goal completion',
+            'Выполнение целей',
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 16),
           if (items.isEmpty)
             Text(
-              'Set weekly goals in Projects.',
+              'Укажите недельные цели в проектах.',
               style: Theme.of(context).textTheme.bodyMedium,
             )
           else
@@ -361,14 +350,9 @@ class GoalCompletionPanel extends StatelessWidget {
 }
 
 class PayoutForecastPanel extends StatelessWidget {
-  const PayoutForecastPanel({
-    required this.forecasts,
-    required this.moneyFormat,
-    super.key,
-  });
+  const PayoutForecastPanel({required this.forecasts, super.key});
 
   final List<PayoutForecast> forecasts;
-  final NumberFormat moneyFormat;
 
   @override
   Widget build(BuildContext context) {
@@ -377,13 +361,13 @@ class PayoutForecastPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Payout forecast',
+            'Прогноз выплат',
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 12),
           if (forecasts.isEmpty)
             Text(
-              'Configure payout rules in Projects.',
+              'Настройте правила выплат в проектах.',
               style: Theme.of(context).textTheme.bodyMedium,
             )
           else
@@ -400,7 +384,7 @@ class PayoutForecastPanel extends StatelessWidget {
                   '${forecast.rule} · ${DateTimeFormats.date.format(forecast.nextPayoutDate)}',
                 ),
                 trailing: Text(
-                  moneyFormat.format(forecast.unpaidAmountMinor / 100),
+                  formatMoneyRub(forecast.unpaidAmountMinor),
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),

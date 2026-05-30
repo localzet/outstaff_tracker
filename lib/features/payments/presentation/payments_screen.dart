@@ -7,24 +7,55 @@ import '../../../core/utils/date_time_formats.dart';
 import '../../../core/widgets/app_screen.dart';
 import '../data/payments_repository.dart';
 
-class PaymentsScreen extends ConsumerWidget {
+enum _PaymentFilter {
+  all,
+  expected,
+  overdue,
+  paid,
+  assumedPaid;
+}
+
+class PaymentsScreen extends ConsumerStatefulWidget {
   const PaymentsScreen({super.key});
 
   static const routePath = '/payments';
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PaymentsScreen> createState() => _PaymentsScreenState();
+}
+
+class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
+  _PaymentFilter _filter = _PaymentFilter.all;
+
+  @override
+  Widget build(BuildContext context) {
     final snapshot = ref.watch(paymentsSnapshotProvider);
 
     return AppScreen(
       title: 'Выплаты',
-      subtitle: 'Ожидаемые и полученные выплаты по проектам.',
+      subtitle: 'Ожидаемые, просроченные и полученные выплаты по проектам.',
+      actions: [
+        OutlinedButton.icon(
+          onPressed: () async {
+            await ref
+                .read(paymentsRepositoryProvider)
+                .markPastPayoutsAssumedPaid();
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Прошлые выплаты отмечены как оплаченные'),
+                ),
+              );
+            }
+          },
+          icon: const Icon(Icons.done_all_rounded, size: 18),
+          label: const Text('Считать прошлые выплаты оплаченными'),
+        ),
+      ],
       children: [
         snapshot.when(
           data: (data) {
-            if (data.expected.isEmpty &&
-                data.paid.isEmpty &&
-                data.problematic.isEmpty) {
+            if (data.all.isEmpty) {
               return const EmptyState(
                 title: 'Выплат пока нет',
                 message:
@@ -35,16 +66,25 @@ class PaymentsScreen extends ConsumerWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                PaymentSection(title: 'Ожидаются', items: data.expected),
-                const SizedBox(height: 16),
-                PaymentSection(title: 'Оплачено', items: data.paid),
-                if (data.problematic.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  PaymentSection(
-                    title: 'Спорные/пропущенные',
-                    items: data.problematic,
+                AppPanel(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final filter in _PaymentFilter.values)
+                        ChoiceChip(
+                          selected: _filter == filter,
+                          label: Text(_filterLabel(filter)),
+                          onSelected: (_) => setState(() => _filter = filter),
+                        ),
+                    ],
                   ),
-                ],
+                ),
+                const SizedBox(height: 16),
+                PaymentSection(
+                  title: _filterLabel(_filter),
+                  items: _filteredItems(data),
+                ),
               ],
             );
           },
@@ -57,16 +97,36 @@ class PaymentsScreen extends ConsumerWidget {
       ],
     );
   }
+
+  List<PaymentItem> _filteredItems(PaymentsSnapshot snapshot) {
+    return switch (_filter) {
+      _PaymentFilter.all => snapshot.all,
+      _PaymentFilter.expected => snapshot.expected,
+      _PaymentFilter.overdue => snapshot.overdue,
+      _PaymentFilter.paid => snapshot.paid,
+      _PaymentFilter.assumedPaid => snapshot.assumedPaid,
+    };
+  }
+
+  String _filterLabel(_PaymentFilter filter) {
+    return switch (filter) {
+      _PaymentFilter.all => 'Все',
+      _PaymentFilter.expected => 'Ожидаются',
+      _PaymentFilter.overdue => 'Просрочены',
+      _PaymentFilter.paid => 'Оплачено',
+      _PaymentFilter.assumedPaid => 'Предположительно оплачено',
+    };
+  }
 }
 
-class PaymentSection extends ConsumerWidget {
+class PaymentSection extends StatelessWidget {
   const PaymentSection({required this.title, required this.items, super.key});
 
   final String title;
   final List<PaymentItem> items;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return AppPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -120,12 +180,21 @@ class PaymentTile extends ConsumerWidget {
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               Text(
-                'Период: ${DateTimeFormats.date.format(item.periodStart)} - ${DateTimeFormats.date.format(item.periodEnd.subtract(const Duration(days: 1)))}',
+                'Период: ${DateTimeFormats.date.format(item.periodStart)} - '
+                '${DateTimeFormats.date.format(item.periodEnd.subtract(const Duration(days: 1)))}',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              Text(
+                'Отработано: ${formatDurationSeconds(item.trackedSeconds)}',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               Text(
                 'Ожидается: ${formatMoneyRub(item.expectedAmountMinor)}'
                 '${item.actualAmountMinor == null ? '' : ' · получено: ${formatMoneyRub(item.actualAmountMinor!)}'}',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              Text(
+                item.status.label,
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               if (item.note != null && item.note!.isNotEmpty)
@@ -139,7 +208,8 @@ class PaymentTile extends ConsumerWidget {
           runSpacing: 6,
           alignment: WrapAlignment.end,
           children: [
-            if (item.status == PaymentStatus.expected)
+            if (item.status == PaymentStatus.expected ||
+                item.status == PaymentStatus.overdue)
               OutlinedButton(
                 onPressed: () async {
                   await ref.read(paymentsRepositoryProvider).markPaid(item);
@@ -186,7 +256,7 @@ class PaymentTile extends ConsumerWidget {
                   for (final value in PaymentStatus.values)
                     DropdownMenuItem(
                       value: value,
-                      child: Text(value.label),
+                      child: Text(value.label, overflow: TextOverflow.ellipsis),
                     ),
                 ],
                 onChanged: (value) {
@@ -233,7 +303,10 @@ class PaymentTile extends ConsumerWidget {
           item,
           status: status,
           actualAmountMinor: amount == null ? null : (amount * 100).round(),
-          paidAt: status == PaymentStatus.paid ? DateTime.now() : null,
+          paidAt: status == PaymentStatus.paid ||
+                  status == PaymentStatus.assumedPaid
+              ? DateTime.now()
+              : null,
           note: noteController.text.trim().isEmpty
               ? null
               : noteController.text.trim(),
@@ -246,7 +319,9 @@ class PaymentTile extends ConsumerWidget {
     final text = [
       item.projectName,
       'Дата выплаты: ${DateTimeFormats.date.format(item.payoutDate)}',
-      'Период: ${DateTimeFormats.date.format(item.periodStart)} - ${DateTimeFormats.date.format(item.periodEnd.subtract(const Duration(days: 1)))}',
+      'Период: ${DateTimeFormats.date.format(item.periodStart)} - '
+          '${DateTimeFormats.date.format(item.periodEnd.subtract(const Duration(days: 1)))}',
+      'Отработано: ${formatDurationSeconds(item.trackedSeconds)}',
       'Ожидается: ${formatMoneyRub(item.expectedAmountMinor)}',
       if (item.actualAmountMinor != null)
         'Получено: ${formatMoneyRub(item.actualAmountMinor!)}',

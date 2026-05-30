@@ -42,6 +42,39 @@ class ProjectWeekSummary {
 
     return (hours / goal * 100).clamp(0, 999).toDouble();
   }
+
+  int get goalSeconds => ((weeklyGoalHours ?? 0) * 3600).round();
+  int get remainingSeconds =>
+      goalSeconds > totalSeconds ? goalSeconds - totalSeconds : 0;
+  int get overworkSeconds =>
+      totalSeconds > goalSeconds ? totalSeconds - goalSeconds : 0;
+}
+
+class WeeklyProjectProgress {
+  const WeeklyProjectProgress({
+    required this.weekStart,
+    required this.weekEnd,
+    required this.projectName,
+    required this.color,
+    required this.goalSeconds,
+    required this.trackedSeconds,
+    required this.amountMinor,
+    required this.paymentPeriodLabel,
+  });
+
+  final DateTime weekStart;
+  final DateTime weekEnd;
+  final String projectName;
+  final String? color;
+  final int goalSeconds;
+  final int trackedSeconds;
+  final int amountMinor;
+  final String paymentPeriodLabel;
+
+  int get remainingSeconds =>
+      goalSeconds > trackedSeconds ? goalSeconds - trackedSeconds : 0;
+  int get overworkSeconds =>
+      trackedSeconds > goalSeconds ? trackedSeconds - goalSeconds : 0;
 }
 
 class NextPayoutEstimate {
@@ -266,21 +299,106 @@ class TimesheetsRepository {
     final range = currentWeekRange();
 
     return _database
-        .select(_database.appProjects)
-        .join([
-          innerJoin(
+        .customSelect(
+          'SELECT COUNT(*) AS c FROM app_projects '
+          'UNION ALL SELECT COUNT(*) FROM kimai_projects '
+          'UNION ALL SELECT COUNT(*) FROM timesheets',
+          readsFrom: {
+            _database.appProjects,
             _database.kimaiProjects,
-            _database.kimaiProjects.id.equalsExp(
-              _database.appProjects.kimaiProjectId,
-            ),
-          ),
-        ])
+            _database.timesheets,
+          },
+        )
         .watch()
-        .asyncMap((rows) async {
+        .asyncMap((_) async {
+          final rows = await _database.select(_database.appProjects).join([
+            innerJoin(
+              _database.kimaiProjects,
+              _database.kimaiProjects.id.equalsExp(
+                _database.appProjects.kimaiProjectId,
+              ),
+            ),
+          ]).get();
           final timesheets = await _timesheetsInRange(range.begin, range.end);
 
           return _projectSummaries(rows, timesheets);
         });
+  }
+
+  Stream<List<WeeklyProjectProgress>> watchWeeklyProgressHistory({
+    int weeks = 8,
+  }) {
+    return _database
+        .customSelect(
+          'SELECT COUNT(*) AS c FROM app_projects '
+          'UNION ALL SELECT COUNT(*) FROM kimai_projects '
+          'UNION ALL SELECT COUNT(*) FROM timesheets',
+          readsFrom: {
+            _database.appProjects,
+            _database.kimaiProjects,
+            _database.timesheets,
+          },
+        )
+        .watch()
+        .asyncMap((_) => getWeeklyProgressHistory(weeks: weeks));
+  }
+
+  Future<List<WeeklyProjectProgress>> getWeeklyProgressHistory({
+    int weeks = 8,
+  }) async {
+    final current = currentWeekRange().begin;
+    final rows = await _database.select(_database.appProjects).join([
+      innerJoin(
+        _database.kimaiProjects,
+        _database.kimaiProjects.id.equalsExp(
+          _database.appProjects.kimaiProjectId,
+        ),
+      ),
+    ]).get();
+    final enabledRows = rows
+        .where((row) => row.readTable(_database.appProjects).enabled)
+        .toList(growable: false);
+    final begin = current.subtract(Duration(days: 7 * (weeks - 1)));
+    final timesheets =
+        await _timesheetsInRange(begin, current.add(const Duration(days: 7)));
+    final result = <WeeklyProjectProgress>[];
+
+    for (var index = 0; index < weeks; index++) {
+      final weekStart = current.subtract(Duration(days: 7 * index));
+      final weekEnd = weekStart.add(const Duration(days: 7));
+      for (final row in enabledRows) {
+        final appProject = row.readTable(_database.appProjects);
+        final kimaiProject = row.readTable(_database.kimaiProjects);
+        final projectTimesheets = timesheets
+            .where(
+              (item) =>
+                  item.appProjectId == appProject.id &&
+                  !item.beginAt.isBefore(weekStart) &&
+                  item.beginAt.isBefore(weekEnd),
+            )
+            .toList(growable: false);
+        result.add(
+          WeeklyProjectProgress(
+            weekStart: weekStart,
+            weekEnd: weekEnd,
+            projectName: kimaiProject.name,
+            color: appProject.color ?? kimaiProject.color,
+            goalSeconds: ((appProject.weeklyGoalHours ?? 0) * 3600).round(),
+            trackedSeconds: projectTimesheets.fold(
+              0,
+              (sum, item) => sum + item.durationSeconds,
+            ),
+            amountMinor: projectTimesheets.fold(
+              0,
+              (sum, item) => sum + (item.amountMinor ?? 0),
+            ),
+            paymentPeriodLabel: appProject.payoutRule,
+          ),
+        );
+      }
+    }
+
+    return result;
   }
 
   Future<NextPayoutEstimate?> getNextPayoutEstimate() async {
@@ -514,6 +632,11 @@ final currentWeekSummaryProvider = StreamProvider<TimesheetSummary>((ref) {
 final projectWeekSummariesProvider =
     StreamProvider<List<ProjectWeekSummary>>((ref) {
   return ref.watch(timesheetsRepositoryProvider).watchProjectWeekSummaries();
+});
+
+final weeklyProgressHistoryProvider =
+    StreamProvider<List<WeeklyProjectProgress>>((ref) {
+  return ref.watch(timesheetsRepositoryProvider).watchWeeklyProgressHistory();
 });
 
 final nextPayoutEstimateProvider = FutureProvider<NextPayoutEstimate?>((ref) {

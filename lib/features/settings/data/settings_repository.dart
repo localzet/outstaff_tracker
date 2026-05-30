@@ -11,6 +11,9 @@ class SettingsRepository {
   static const currencyKey = 'settings.currency';
   static const localeKey = 'settings.locale';
   static const onboardingCompleteKey = 'settings.onboarding.complete';
+  static const comfortableWeeklyCapacityHoursKey =
+      'settings.capacity.weekly_hours';
+  static const assumePastPayoutsPaidKey = 'settings.payouts.assume_past_paid';
 
   final AppDatabase _database;
 
@@ -24,6 +27,14 @@ class SettingsRepository {
       baseUrl: values[baseUrlKey] ?? AppSettings.defaults.baseUrl,
       currency: values[currencyKey] ?? AppSettings.defaults.currency,
       locale: values[localeKey] ?? AppSettings.defaults.locale,
+      comfortableWeeklyCapacityHours: double.tryParse(
+            values[comfortableWeeklyCapacityHoursKey] ?? '',
+          ) ??
+          AppSettings.defaults.comfortableWeeklyCapacityHours,
+      assumePastPayoutsPaid: bool.tryParse(
+            values[assumePastPayoutsPaidKey] ?? '',
+          ) ??
+          AppSettings.defaults.assumePastPayoutsPaid,
     );
   }
 
@@ -32,6 +43,14 @@ class SettingsRepository {
       await _upsertValue(baseUrlKey, settings.baseUrl);
       await _upsertValue(currencyKey, settings.currency);
       await _upsertValue(localeKey, settings.locale);
+      await _upsertValue(
+        comfortableWeeklyCapacityHoursKey,
+        settings.comfortableWeeklyCapacityHours.toString(),
+      );
+      await _upsertValue(
+        assumePastPayoutsPaidKey,
+        settings.assumePastPayoutsPaid.toString(),
+      );
     });
   }
 
@@ -49,7 +68,14 @@ class SettingsRepository {
 
   Future<Map<String, String?>> exportSettingsBackup() async {
     final rows = await _database.select(_database.syncState).get();
-    final allowed = {baseUrlKey, currencyKey, localeKey, onboardingCompleteKey};
+    final allowed = {
+      baseUrlKey,
+      currencyKey,
+      localeKey,
+      onboardingCompleteKey,
+      comfortableWeeklyCapacityHoursKey,
+      assumePastPayoutsPaidKey,
+    };
 
     return {
       for (final row in rows)
@@ -58,7 +84,14 @@ class SettingsRepository {
   }
 
   Future<void> importSettingsBackup(Map<String, Object?> values) async {
-    final allowed = {baseUrlKey, currencyKey, localeKey, onboardingCompleteKey};
+    final allowed = {
+      baseUrlKey,
+      currencyKey,
+      localeKey,
+      onboardingCompleteKey,
+      comfortableWeeklyCapacityHoursKey,
+      assumePastPayoutsPaidKey,
+    };
     await _database.transaction(() async {
       for (final entry in values.entries) {
         if (allowed.contains(entry.key) && entry.value is String) {
