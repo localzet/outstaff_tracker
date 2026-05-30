@@ -306,6 +306,10 @@ class PaymentPeriodProgressPanel extends StatelessWidget {
                 formatMoneyRub(item.expectedAmountMinor),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
+              Text(
+                'До выплаты: ${_daysUntil(item.payoutDate)}',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
               if (item != items.last) const Divider(height: 20),
             ],
         ],
@@ -533,6 +537,21 @@ class MetricTile extends StatelessWidget {
       ),
     );
   }
+}
+
+String _daysUntil(DateTime payoutDate) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final days = DateTime(
+    payoutDate.year,
+    payoutDate.month,
+    payoutDate.day,
+  ).difference(today).inDays;
+  if (days <= 0) {
+    return 'сегодня';
+  }
+
+  return '$days дн.';
 }
 
 Color _parseColor(String? value) {

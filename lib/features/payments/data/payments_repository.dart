@@ -52,6 +52,7 @@ class PaymentItem {
     required this.periodEnd,
     required this.expectedAmountMinor,
     required this.trackedSeconds,
+    required this.requiredSeconds,
     required this.status,
     required this.isActivePeriod,
     this.actualAmountMinor,
@@ -68,11 +69,14 @@ class PaymentItem {
   final DateTime periodEnd;
   final int expectedAmountMinor;
   final int trackedSeconds;
+  final int requiredSeconds;
   final PaymentStatus status;
   final bool isActivePeriod;
   final int? actualAmountMinor;
   final DateTime? paidAt;
   final String? note;
+
+  int get balanceSeconds => trackedSeconds - requiredSeconds;
 
   bool get isMeaningfulUpcoming {
     return (status == PaymentStatus.expected ||
@@ -365,6 +369,12 @@ class PaymentsRepository {
           continue;
         }
 
+        final weeks = math.max(
+          1,
+          (period.end.difference(period.start).inDays / 7).ceil(),
+        );
+        final requiredSeconds =
+            ((appProject.weeklyGoalHours ?? 0) * weeks * 3600).round();
         final item = PaymentItem(
           id: _paymentId(kimaiProject.id, period.payoutDate),
           kimaiProjectId: kimaiProject.id,
@@ -375,6 +385,7 @@ class PaymentsRepository {
           periodEnd: period.end,
           expectedAmountMinor: amount,
           trackedSeconds: totals.seconds,
+          requiredSeconds: requiredSeconds,
           status: status,
           isActivePeriod: isActive,
           actualAmountMinor:
@@ -385,10 +396,6 @@ class PaymentsRepository {
         result.add(item);
 
         if (isActive) {
-          final weeks = math.max(
-            1,
-            (period.end.difference(period.start).inDays / 7).ceil(),
-          );
           progress.add(
             PaymentPeriodProgress(
               projectName: kimaiProject.name,
@@ -396,8 +403,7 @@ class PaymentsRepository {
               periodStart: period.start,
               periodEnd: period.end,
               payoutDate: period.payoutDate,
-              requiredSeconds:
-                  ((appProject.weeklyGoalHours ?? 0) * weeks * 3600).round(),
+              requiredSeconds: requiredSeconds,
               trackedSeconds: totals.seconds,
               expectedAmountMinor: amount,
             ),
@@ -448,6 +454,7 @@ class PaymentsRepository {
       periodEnd: payment.periodEnd,
       expectedAmountMinor: payment.expectedAmountMinor,
       trackedSeconds: 0,
+      requiredSeconds: 0,
       actualAmountMinor: payment.actualAmountMinor,
       status: PaymentStatus.fromStorage(payment.status),
       paidAt: payment.paidAt,
@@ -474,6 +481,7 @@ class PaymentsRepository {
       periodEnd: generated.periodEnd,
       expectedAmountMinor: generated.expectedAmountMinor,
       trackedSeconds: generated.trackedSeconds,
+      requiredSeconds: generated.requiredSeconds,
       status: stored.status,
       isActivePeriod: generated.isActivePeriod,
       actualAmountMinor: stored.actualAmountMinor,

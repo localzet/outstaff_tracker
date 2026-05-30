@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:outstaff_tracker/core/db/app_database.dart';
+import 'package:outstaff_tracker/core/network/kimai_api_client.dart';
 import 'package:outstaff_tracker/features/timesheets/data/timesheets_repository.dart';
 
 void main() {
@@ -62,5 +63,43 @@ void main() {
     expect(totals.totalSeconds, 3600);
     expect(totals.amountMinor, 10000);
     expect(totals.entryCount, 1);
+  });
+
+  test('applies rate history only for matching effective period', () async {
+    await database.into(database.projectRateHistory).insert(
+          ProjectRateHistoryCompanion.insert(
+            id: 'rate_1',
+            projectId: 'kimai_1',
+            hourlyRateMinor: 20000,
+            effectiveFrom: DateTime.utc(2026, 6),
+            createdAt: DateTime.utc(2026, 6),
+          ),
+        );
+
+    await repository.upsertRemoteTimesheets(
+      [
+        KimaiTimesheetDto(
+          id: 201,
+          projectId: 1,
+          beginAt: DateTime.utc(2026, 5, 20, 9),
+          durationSeconds: 3600,
+        ),
+        KimaiTimesheetDto(
+          id: 202,
+          projectId: 1,
+          beginAt: DateTime.utc(2026, 6, 2, 9),
+          durationSeconds: 3600,
+        ),
+      ],
+      await database.select(database.appProjects).get(),
+    );
+
+    final rows = await (database.select(database.timesheets)
+          ..where((table) => table.id.isIn([201, 202]))
+          ..orderBy([(table) => OrderingTerm.asc(table.id)]))
+        .get();
+
+    expect(rows[0].amountMinor, null);
+    expect(rows[1].amountMinor, 20000);
   });
 }

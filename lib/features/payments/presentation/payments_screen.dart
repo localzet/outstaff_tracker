@@ -189,6 +189,16 @@ class PaymentTile extends ConsumerWidget {
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               Text(
+                'Цель периода: ${formatDurationSeconds(item.requiredSeconds)}',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              Text(
+                item.balanceSeconds >= 0
+                    ? 'Запас: +${formatDurationSeconds(item.balanceSeconds)}'
+                    : 'Осталось: ${formatDurationSeconds(item.balanceSeconds.abs())}',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              Text(
                 'Ожидается: ${formatMoneyRub(item.expectedAmountMinor)}'
                 '${item.actualAmountMinor == null ? '' : ' · получено: ${formatMoneyRub(item.actualAmountMinor!)}'}',
                 style: Theme.of(context).textTheme.bodyMedium,
@@ -322,6 +332,10 @@ class PaymentTile extends ConsumerWidget {
       'Период: ${DateTimeFormats.date.format(item.periodStart)} - '
           '${DateTimeFormats.date.format(item.periodEnd.subtract(const Duration(days: 1)))}',
       'Отработано: ${formatDurationSeconds(item.trackedSeconds)}',
+      'Цель периода: ${formatDurationSeconds(item.requiredSeconds)}',
+      item.balanceSeconds >= 0
+          ? 'Запас: +${formatDurationSeconds(item.balanceSeconds)}'
+          : 'Осталось: ${formatDurationSeconds(item.balanceSeconds.abs())}',
       'Ожидается: ${formatMoneyRub(item.expectedAmountMinor)}',
       if (item.actualAmountMinor != null)
         'Получено: ${formatMoneyRub(item.actualAmountMinor!)}',

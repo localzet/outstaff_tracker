@@ -2,7 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/app_database.dart';
-import '../../projects/data/projects_repository.dart';
+import '../../settings/data/settings_repository.dart';
 
 class PeriodValue {
   const PeriodValue({
@@ -67,22 +67,40 @@ class AverageWorkingDayStats {
       workingDays == 0 ? 0 : totalSeconds / workingDays / 3600;
 }
 
-class PayoutForecast {
-  const PayoutForecast({
+class ProjectAverageStat {
+  const ProjectAverageStat({
     required this.projectName,
     required this.color,
-    required this.rule,
-    required this.nextPayoutDate,
-    required this.previousPayoutDate,
-    required this.unpaidAmountMinor,
+    required this.averageDaySeconds,
+    required this.averageWeekSeconds,
   });
 
   final String projectName;
   final String? color;
-  final String rule;
-  final DateTime nextPayoutDate;
-  final DateTime previousPayoutDate;
-  final int unpaidAmountMinor;
+  final int averageDaySeconds;
+  final int averageWeekSeconds;
+}
+
+class TimeDistributionStat {
+  const TimeDistributionStat({
+    required this.label,
+    required this.totalSeconds,
+  });
+
+  final String label;
+  final int totalSeconds;
+}
+
+class CapacityStats {
+  const CapacityStats({
+    required this.averageWeekSeconds,
+    required this.capacitySeconds,
+  });
+
+  final int averageWeekSeconds;
+  final int capacitySeconds;
+
+  int get freeSeconds => capacitySeconds - averageWeekSeconds;
 }
 
 class AnalyticsSnapshot {
@@ -92,7 +110,10 @@ class AnalyticsSnapshot {
     required this.projectDistribution,
     required this.goalCompletion,
     required this.averageWorkingDay,
-    required this.payoutForecasts,
+    required this.projectAverages,
+    required this.hoursByWeekday,
+    required this.hoursByHour,
+    required this.capacity,
   });
 
   final List<PeriodValue> weeklyHours;
@@ -100,7 +121,10 @@ class AnalyticsSnapshot {
   final List<ProjectDistributionItem> projectDistribution;
   final List<GoalCompletionStat> goalCompletion;
   final AverageWorkingDayStats averageWorkingDay;
-  final List<PayoutForecast> payoutForecasts;
+  final List<ProjectAverageStat> projectAverages;
+  final List<TimeDistributionStat> hoursByWeekday;
+  final List<TimeDistributionStat> hoursByHour;
+  final CapacityStats capacity;
 
   PeriodValue? get bestWeek => _extremeWeek(compareMax: true);
   PeriodValue? get worstWeek => _extremeWeek(compareMax: false);
@@ -119,9 +143,11 @@ class AnalyticsSnapshot {
 }
 
 class AnalyticsRepository {
-  AnalyticsRepository(this._database);
+  AnalyticsRepository(this._database, {SettingsRepository? settingsRepository})
+      : _settingsRepository = settingsRepository;
 
   final AppDatabase _database;
+  final SettingsRepository? _settingsRepository;
 
   Future<List<PeriodValue>> getWeeklyHoursHistory({int weeks = 12}) async {
     final currentStart = _startOfWeek(DateTime.now());
@@ -200,44 +226,89 @@ class AnalyticsRepository {
     );
   }
 
-  Future<List<PayoutForecast>> getPayoutForecasts() async {
+  Future<List<ProjectAverageStat>> getProjectAverageStats({
+    DateTime? begin,
+    DateTime? end,
+  }) async {
+    final range = _defaultAnalyticsRange(begin: begin, end: end);
     final rows = await _projectRows();
-    final customDates = await _database.select(_database.payoutDates).get();
-    final now = DateTime.now();
-    final forecasts = <PayoutForecast>[];
+    final timesheets = await _timesheetsInRange(range.begin, range.end);
+    final weeks =
+        mathMax(1, (range.end.difference(range.begin).inDays / 7).ceil());
 
-    for (final row in rows) {
-      final appProject = row.readTable(_database.appProjects);
-      if (!appProject.enabled ||
-          appProject.payoutRule == PayoutRule.none.storageValue) {
-        continue;
-      }
-
-      final dates = customDates
-          .where((date) => date.appProjectId == appProject.id)
-          .map((date) => date.payoutDate)
-          .toList()
-        ..sort();
-      final next = _nextPayoutDate(appProject.payoutRule, now, dates);
-      final previous = _previousPayoutDate(appProject.payoutRule, next, dates);
-      final unpaidAmount = await _unpaidAmount(appProject.id, previous, next);
-
-      forecasts.add(
-        PayoutForecast(
-          projectName: row.readTable(_database.kimaiProjects).name,
-          color:
-              appProject.color ?? row.readTable(_database.kimaiProjects).color,
-          rule: appProject.payoutRule,
-          nextPayoutDate: next,
-          previousPayoutDate: previous,
-          unpaidAmountMinor: unpaidAmount,
+    return [
+      for (final row in rows)
+        _projectAverageStat(
+          kimaiProject: row.readTable(_database.kimaiProjects),
+          appProject: row.readTable(_database.appProjects),
+          timesheets: timesheets,
+          weeks: weeks,
         ),
+    ]..removeWhere(
+        (item) => item.averageDaySeconds == 0 && item.averageWeekSeconds == 0,
       );
+  }
+
+  Future<List<TimeDistributionStat>> getHoursByWeekday({
+    DateTime? begin,
+    DateTime? end,
+  }) async {
+    final range = _defaultAnalyticsRange(begin: begin, end: end);
+    final timesheets = await _timesheetsInRange(range.begin, range.end);
+    const labels = [
+      'Пн',
+      'Вт',
+      'Ср',
+      'Чт',
+      'Пт',
+      'Сб',
+      'Вс',
+    ];
+    final totals = List<int>.filled(7, 0);
+    for (final item in timesheets) {
+      totals[item.beginAt.toLocal().weekday - 1] += item.durationSeconds;
     }
 
-    forecasts.sort((a, b) => a.nextPayoutDate.compareTo(b.nextPayoutDate));
+    return [
+      for (var index = 0; index < labels.length; index++)
+        TimeDistributionStat(label: labels[index], totalSeconds: totals[index]),
+    ];
+  }
 
-    return forecasts;
+  Future<List<TimeDistributionStat>> getHoursByHour({
+    DateTime? begin,
+    DateTime? end,
+  }) async {
+    final range = _defaultAnalyticsRange(begin: begin, end: end);
+    final timesheets = await _timesheetsInRange(range.begin, range.end);
+    final totals = List<int>.filled(24, 0);
+    for (final item in timesheets) {
+      totals[item.beginAt.toLocal().hour] += item.durationSeconds;
+    }
+
+    return [
+      for (var hour = 0; hour < totals.length; hour++)
+        TimeDistributionStat(
+          label: '${hour.toString().padLeft(2, '0')}:00',
+          totalSeconds: totals[hour],
+        ),
+    ];
+  }
+
+  Future<CapacityStats> getCapacityStats() async {
+    final settings =
+        await (_settingsRepository ?? SettingsRepository(_database))
+            .loadSettings();
+    final weekly = await getWeeklyHoursHistory(weeks: 4);
+    final averageHours = weekly.isEmpty
+        ? 0
+        : weekly.fold<double>(0, (sum, item) => sum + item.value) /
+            weekly.length;
+
+    return CapacityStats(
+      averageWeekSeconds: (averageHours * 3600).round(),
+      capacitySeconds: (settings.comfortableWeeklyCapacityHours * 3600).round(),
+    );
   }
 
   Future<AnalyticsSnapshot> getSnapshot() async {
@@ -246,7 +317,10 @@ class AnalyticsRepository {
     final distribution = await getProjectDistribution();
     final goals = await getGoalCompletionStats();
     final average = await getAverageWorkingDayStats();
-    final payouts = await getPayoutForecasts();
+    final projectAverages = await getProjectAverageStats();
+    final hoursByWeekday = await getHoursByWeekday();
+    final hoursByHour = await getHoursByHour();
+    final capacity = await getCapacityStats();
 
     return AnalyticsSnapshot(
       weeklyHours: weeklyHours,
@@ -254,7 +328,10 @@ class AnalyticsRepository {
       projectDistribution: distribution,
       goalCompletion: goals,
       averageWorkingDay: average,
-      payoutForecasts: payouts,
+      projectAverages: projectAverages,
+      hoursByWeekday: hoursByWeekday,
+      hoursByHour: hoursByHour,
+      capacity: capacity,
     );
   }
 
@@ -263,31 +340,17 @@ class AnalyticsRepository {
         .customSelect(
           'SELECT COUNT(*) AS c FROM app_projects '
           'UNION ALL SELECT COUNT(*) FROM payout_dates '
-          'UNION ALL SELECT COUNT(*) FROM timesheets',
+          'UNION ALL SELECT COUNT(*) FROM timesheets '
+          'UNION ALL SELECT COUNT(*) FROM sync_state',
           readsFrom: {
             _database.appProjects,
             _database.payoutDates,
             _database.timesheets,
+            _database.syncState,
           },
         )
         .watch()
         .asyncMap((_) => getSnapshot());
-  }
-
-  Stream<List<PayoutForecast>> watchPayoutForecasts() {
-    return _database
-        .customSelect(
-          'SELECT COUNT(*) AS c FROM app_projects '
-          'UNION ALL SELECT COUNT(*) FROM payout_dates '
-          'UNION ALL SELECT COUNT(*) FROM timesheets',
-          readsFrom: {
-            _database.appProjects,
-            _database.payoutDates,
-            _database.timesheets,
-          },
-        )
-        .watch()
-        .asyncMap((_) => getPayoutForecasts());
   }
 
   Future<PeriodValue> _weeklyHours(DateTime begin) async {
@@ -380,20 +443,29 @@ class AnalyticsRepository {
     );
   }
 
-  Future<int> _unpaidAmount(
-    String appProjectId,
-    DateTime previous,
-    DateTime next,
-  ) async {
-    final query = _database.select(_database.timesheets)
-      ..where((table) => table.appProjectId.equals(appProjectId))
-      ..where((table) => table.beginAt.isBiggerOrEqualValue(previous))
-      ..where((table) => table.beginAt.isSmallerThanValue(next));
-    final timesheets = await query.get();
+  ProjectAverageStat _projectAverageStat({
+    required KimaiProject kimaiProject,
+    required AppProject appProject,
+    required List<Timesheet> timesheets,
+    required int weeks,
+  }) {
+    final projectTimesheets =
+        timesheets.where((item) => item.appProjectId == appProject.id);
+    final dayTotals = <DateTime, int>{};
+    var totalSeconds = 0;
+    for (final item in projectTimesheets) {
+      final local = item.beginAt.toLocal();
+      final day = DateTime(local.year, local.month, local.day);
+      dayTotals[day] = (dayTotals[day] ?? 0) + item.durationSeconds;
+      totalSeconds += item.durationSeconds;
+    }
 
-    return timesheets.fold<int>(
-      0,
-      (sum, item) => sum + (item.amountMinor ?? 0),
+    return ProjectAverageStat(
+      projectName: kimaiProject.name,
+      color: appProject.color ?? kimaiProject.color,
+      averageDaySeconds:
+          dayTotals.isEmpty ? 0 : (totalSeconds / dayTotals.length).round(),
+      averageWeekSeconds: (totalSeconds / weeks).round(),
     );
   }
 
@@ -410,15 +482,14 @@ class AnalyticsRepository {
 }
 
 final analyticsRepositoryProvider = Provider<AnalyticsRepository>((ref) {
-  return AnalyticsRepository(ref.watch(appDatabaseProvider));
+  return AnalyticsRepository(
+    ref.watch(appDatabaseProvider),
+    settingsRepository: ref.watch(settingsRepositoryProvider),
+  );
 });
 
 final analyticsSnapshotProvider = StreamProvider<AnalyticsSnapshot>((ref) {
   return ref.watch(analyticsRepositoryProvider).watchSnapshot();
-});
-
-final payoutForecastsProvider = StreamProvider<List<PayoutForecast>>((ref) {
-  return ref.watch(analyticsRepositoryProvider).watchPayoutForecasts();
 });
 
 DateTime _startOfWeek(DateTime value) {
@@ -426,49 +497,4 @@ DateTime _startOfWeek(DateTime value) {
   return day.subtract(Duration(days: day.weekday - 1));
 }
 
-DateTime _nextPayoutDate(
-  String rule,
-  DateTime from,
-  List<DateTime> customDates,
-) {
-  final today = DateTime(from.year, from.month, from.day);
-  if (rule == PayoutRule.customDates.storageValue) {
-    return customDates.firstWhere(
-      (date) => !date.isBefore(today),
-      orElse: () => today,
-    );
-  }
-
-  final stepDays = switch (rule) {
-    'biweekly' => 14,
-    'triweekly' => 21,
-    'monthly' => 0,
-    _ => 0,
-  };
-
-  if (rule == 'monthly') {
-    return DateTime(today.year, today.month + 1, 1);
-  }
-
-  return today.add(Duration(days: stepDays));
-}
-
-DateTime _previousPayoutDate(
-  String rule,
-  DateTime next,
-  List<DateTime> customDates,
-) {
-  if (rule == PayoutRule.customDates.storageValue) {
-    final previous = customDates.where((date) => date.isBefore(next)).toList();
-    return previous.isEmpty
-        ? next.subtract(const Duration(days: 30))
-        : previous.last;
-  }
-
-  return switch (rule) {
-    'biweekly' => next.subtract(const Duration(days: 14)),
-    'triweekly' => next.subtract(const Duration(days: 21)),
-    'monthly' => DateTime(next.year, next.month - 1, next.day),
-    _ => next.subtract(const Duration(days: 30)),
-  };
-}
+int mathMax(int a, int b) => a > b ? a : b;

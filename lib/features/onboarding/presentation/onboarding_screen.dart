@@ -15,8 +15,8 @@ class OnboardingScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return AppScreen(
-      title: 'Setup',
-      subtitle: 'Complete the local Kimai setup to start tracking analytics.',
+      title: 'Первый запуск',
+      subtitle: 'Подключите Kimai и подготовьте проекты к расчётам.',
       actions: [
         FilledButton.icon(
           onPressed: () async {
@@ -28,29 +28,29 @@ class OnboardingScreen extends ConsumerWidget {
             }
           },
           icon: const Icon(Icons.check_rounded, size: 18),
-          label: const Text('Mark complete'),
+          label: const Text('Готово'),
         ),
       ],
       children: [
         const _OnboardingStep(
           index: 1,
-          title: 'Connect Kimai',
-          description: 'Add the base URL and API token in Settings.',
+          title: 'Подключите Kimai',
+          description: 'Укажите адрес Kimai и API-токен в настройках.',
         ),
         const _OnboardingStep(
           index: 2,
-          title: 'Import projects',
-          description: 'Use Connect to fetch real Kimai projects into SQLite.',
+          title: 'Импортируйте проекты',
+          description: 'Загрузите реальные проекты Kimai в данные приложения.',
         ),
         const _OnboardingStep(
           index: 3,
-          title: 'Configure rates and goals',
-          description: 'Enable projects and set hourly rates and weekly goals.',
+          title: 'Настройте ставки и цели',
+          description: 'Включите проекты, ставки, цели и даты выплат.',
         ),
         const _OnboardingStep(
           index: 4,
-          title: 'Sync last year',
-          description: 'Run a full local timesheet sync from Settings.',
+          title: 'Синхронизируйте год',
+          description: 'Запустите полную синхронизацию времени в настройках.',
         ),
         AppPanel(
           child: Row(
@@ -59,13 +59,13 @@ class OnboardingScreen extends ConsumerWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Open Settings to continue setup.',
+                  'Откройте настройки, чтобы продолжить.',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
               OutlinedButton(
                 onPressed: () => context.go(SettingsScreen.routePath),
-                child: const Text('Settings'),
+                child: const Text('Настройки'),
               ),
             ],
           ),

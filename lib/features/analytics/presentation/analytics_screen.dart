@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_time_formats.dart';
 import '../../../core/widgets/app_screen.dart';
+import '../../payments/data/payments_repository.dart';
 import '../data/analytics_repository.dart';
 
 class AnalyticsScreen extends ConsumerWidget {
@@ -15,10 +16,11 @@ class AnalyticsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final snapshot = ref.watch(analyticsSnapshotProvider);
+    final payments = ref.watch(paymentsSnapshotProvider);
 
     return AppScreen(
       title: 'Аналитика',
-      subtitle: 'Ритм работы, доход, цели и распределение по проектам.',
+      subtitle: 'Загрузка, ритм работы и способность взять новый проект.',
       children: [
         snapshot.when(
           data: (data) {
@@ -51,20 +53,23 @@ class AnalyticsScreen extends ConsumerWidget {
                       detail: data.bestWeek?.label ?? '-',
                     ),
                     MetricCard(
-                      label: 'Самая тихая неделя',
-                      value: _weekValue(data.worstWeek),
-                      detail: data.worstWeek?.label ?? '-',
+                      label: 'Свободно по мощности',
+                      value: data.capacity.freeSeconds >= 0
+                          ? formatDurationSeconds(data.capacity.freeSeconds)
+                          : '-${formatDurationSeconds(data.capacity.freeSeconds.abs())}',
+                      detail:
+                          'Средняя загрузка: ${formatDurationSeconds(data.capacity.averageWeekSeconds)} / нед',
                     ),
                   ],
                 ),
                 const SizedBox(height: 16),
                 AnalyticsChartPanel(
-                  title: 'Часы по неделям · последние 12 недель',
+                  title: 'Тренд 12 недель',
                   child: BarChartWidget(values: data.weeklyHours),
                 ),
                 const SizedBox(height: 16),
                 AnalyticsChartPanel(
-                  title: 'Доход по месяцам · последние 6 месяцев',
+                  title: 'Доход по месяцам',
                   child: BarChartWidget(values: data.monthlyIncome),
                 ),
                 const SizedBox(height: 16),
@@ -80,7 +85,17 @@ class AnalyticsScreen extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
-                PayoutForecastPanel(forecasts: data.payoutForecasts),
+                WorkloadAnalyticsPanel(data: data),
+                const SizedBox(height: 16),
+                payments.when(
+                  data: (snapshot) =>
+                      PayoutForecastPanel(items: snapshot.nextExpected),
+                  loading: () => const LinearProgressIndicator(),
+                  error: (error, stackTrace) => EmptyState(
+                    title: 'Прогноз выплат недоступен',
+                    message: error.toString(),
+                  ),
+                ),
               ],
             );
           },
@@ -349,10 +364,134 @@ class GoalCompletionPanel extends StatelessWidget {
   }
 }
 
-class PayoutForecastPanel extends StatelessWidget {
-  const PayoutForecastPanel({required this.forecasts, super.key});
+class WorkloadAnalyticsPanel extends StatelessWidget {
+  const WorkloadAnalyticsPanel({required this.data, super.key});
 
-  final List<PayoutForecast> forecasts;
+  final AnalyticsSnapshot data;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Загрузка и ритм',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Средняя загрузка: '
+            '${formatDurationSeconds(data.capacity.averageWeekSeconds)} / нед',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          Text(
+            data.capacity.freeSeconds >= 0
+                ? 'Свободно: ${formatDurationSeconds(data.capacity.freeSeconds)} / нед'
+                : 'Перегруз: ${formatDurationSeconds(data.capacity.freeSeconds.abs())} / нед',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 12),
+          ResponsiveGrid(
+            children: [
+              _DistributionList(
+                title: 'По дням недели',
+                items: data.hoursByWeekday,
+              ),
+              _DistributionList(
+                title: 'По часам дня',
+                items: data.hoursByHour
+                    .where((item) => item.totalSeconds > 0)
+                    .toList(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Средние значения по проектам',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          for (final item in data.projectAverages)
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                Icons.circle,
+                size: 12,
+                color: _parseColor(item.color),
+              ),
+              title: Text(item.projectName),
+              subtitle: Text(
+                'В день: ${formatDurationSeconds(item.averageDaySeconds)} · '
+                'в неделю: ${formatDurationSeconds(item.averageWeekSeconds)}',
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DistributionList extends StatelessWidget {
+  const _DistributionList({required this.title, required this.items});
+
+  final String title;
+  final List<TimeDistributionStat> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          if (items.isEmpty)
+            Text('Нет данных.', style: Theme.of(context).textTheme.bodyMedium)
+          else
+            for (final item in items.take(12)) ...[
+              Row(
+                children: [
+                  SizedBox(width: 56, child: Text(item.label)),
+                  Expanded(
+                    child: LinearProgressIndicator(
+                      value: _relativeValue(item, items),
+                      backgroundColor: AppColors.surfaceElevated,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(formatDurationSeconds(item.totalSeconds)),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
+        ],
+      ),
+    );
+  }
+
+  double _relativeValue(
+    TimeDistributionStat item,
+    List<TimeDistributionStat> items,
+  ) {
+    final max = items.fold<int>(
+      0,
+      (current, value) =>
+          value.totalSeconds > current ? value.totalSeconds : current,
+    );
+    if (max == 0) {
+      return 0;
+    }
+
+    return item.totalSeconds / max;
+  }
+}
+
+class PayoutForecastPanel extends StatelessWidget {
+  const PayoutForecastPanel({required this.items, super.key});
+
+  final List<PaymentItem> items;
 
   @override
   Widget build(BuildContext context) {
@@ -365,26 +504,27 @@ class PayoutForecastPanel extends StatelessWidget {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 12),
-          if (forecasts.isEmpty)
+          if (items.isEmpty)
             Text(
-              'Настройте правила выплат в проектах.',
+              'Нет ближайших выплат с суммой.',
               style: Theme.of(context).textTheme.bodyMedium,
             )
           else
-            for (final forecast in forecasts)
+            for (final item in items)
               ListTile(
                 dense: true,
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(
                   Icons.event_available_rounded,
-                  color: _parseColor(forecast.color),
+                  color: _parseColor(item.color),
                 ),
-                title: Text(forecast.projectName),
+                title: Text(item.projectName),
                 subtitle: Text(
-                  '${forecast.rule} · ${DateTimeFormats.date.format(forecast.nextPayoutDate)}',
+                  '${DateTimeFormats.date.format(item.periodStart)} — '
+                  '${DateTimeFormats.date.format(item.periodEnd.subtract(const Duration(days: 1)))}',
                 ),
                 trailing: Text(
-                  formatMoneyRub(forecast.unpaidAmountMinor),
+                  formatMoneyRub(item.expectedAmountMinor),
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),

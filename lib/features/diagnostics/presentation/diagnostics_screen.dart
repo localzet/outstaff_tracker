@@ -187,7 +187,7 @@ class _DiagnosticsData {
     return [
       'Outstaff Tracker diagnostics',
       'app_version=${DiagnosticsScreen._appVersion}',
-      'db_schema_version=$schemaVersion',
+      'data_version=$schemaVersion',
       'kimai_base_url=$baseUrl',
       'enabled_projects=$enabledProjects',
       for (final log in logs) ...[

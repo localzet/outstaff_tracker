@@ -78,6 +78,19 @@ class PayoutDates extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
+class ProjectRateHistory extends Table {
+  TextColumn get id => text()();
+  TextColumn get projectId =>
+      text().customConstraint('NOT NULL REFERENCES app_projects(id)')();
+  IntColumn get hourlyRateMinor => integer()();
+  DateTimeColumn get effectiveFrom => dateTime()();
+  DateTimeColumn get effectiveTo => dateTime().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
 class Timesheets extends Table {
   IntColumn get id => integer()();
   IntColumn get kimaiProjectId => integer()
@@ -142,6 +155,7 @@ class SyncLogs extends Table {
     KimaiProjects,
     AppProjects,
     PayoutDates,
+    ProjectRateHistory,
     Timesheets,
     Payments,
     SyncLogs,
@@ -162,7 +176,7 @@ class AppDatabase extends _$AppDatabase {
         );
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -188,6 +202,9 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 7) {
             await m.addColumn(appProjects, appProjects.payoutAnchorDate);
+          }
+          if (from < 8) {
+            await m.createTable(projectRateHistory);
           }
         },
       );

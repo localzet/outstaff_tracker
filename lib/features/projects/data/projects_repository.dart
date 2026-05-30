@@ -212,6 +212,10 @@ class ProjectsRepository {
     final now = DateTime.now().toUtc();
 
     await _database.transaction(() async {
+      final existing = await (_database.select(_database.appProjects)
+            ..where((table) => table.id.equals(appProjectId)))
+          .getSingleOrNull();
+
       await (_database.update(_database.appProjects)
             ..where((table) => table.id.equals(appProjectId)))
           .write(
@@ -246,38 +250,44 @@ class ProjectsRepository {
       );
 
       if (clearHourlyRate || hourlyRateMinor != null) {
-        await _recalculateTimesheetAmounts(
+        await _recordRateChange(
           appProjectId: appProjectId,
-          hourlyRateMinor: clearHourlyRate ? null : hourlyRateMinor,
+          previousRateMinor: existing?.hourlyRateMinor,
+          nextRateMinor: clearHourlyRate ? null : hourlyRateMinor,
+          effectiveFrom: now,
         );
       }
     });
   }
 
-  Future<void> _recalculateTimesheetAmounts({
+  Future<void> _recordRateChange({
     required String appProjectId,
-    required int? hourlyRateMinor,
+    required int? previousRateMinor,
+    required int? nextRateMinor,
+    required DateTime effectiveFrom,
   }) async {
-    final rows = await (_database.select(_database.timesheets)
-          ..where((table) => table.appProjectId.equals(appProjectId)))
-        .get();
+    if (previousRateMinor == nextRateMinor) {
+      return;
+    }
 
-    await _database.batch((batch) {
-      for (final row in rows) {
-        batch.update(
-          _database.timesheets,
-          TimesheetsCompanion(
-            amountMinor: Value(
-              hourlyRateMinor == null
-                  ? null
-                  : (row.durationSeconds * hourlyRateMinor / 3600).round(),
-            ),
-            currency: const Value('RUB'),
+    await (_database.update(_database.projectRateHistory)
+          ..where((table) => table.projectId.equals(appProjectId))
+          ..where((table) => table.effectiveTo.isNull()))
+        .write(ProjectRateHistoryCompanion(effectiveTo: Value(effectiveFrom)));
+
+    if (nextRateMinor == null) {
+      return;
+    }
+
+    await _database.into(_database.projectRateHistory).insert(
+          ProjectRateHistoryCompanion.insert(
+            id: 'rate_${effectiveFrom.microsecondsSinceEpoch}_$appProjectId',
+            projectId: appProjectId,
+            hourlyRateMinor: nextRateMinor,
+            effectiveFrom: effectiveFrom,
+            createdAt: effectiveFrom,
           ),
-          where: (table) => table.id.equals(row.id),
         );
-      }
-    });
   }
 }
 

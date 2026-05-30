@@ -77,18 +77,6 @@ class WeeklyProjectProgress {
       trackedSeconds > goalSeconds ? trackedSeconds - goalSeconds : 0;
 }
 
-class NextPayoutEstimate {
-  const NextPayoutEstimate({
-    required this.rule,
-    required this.estimatedDate,
-    required this.amountMinor,
-  });
-
-  final String rule;
-  final DateTime estimatedDate;
-  final int amountMinor;
-}
-
 enum TimesheetSortField {
   date,
   duration,
@@ -401,29 +389,6 @@ class TimesheetsRepository {
     return result;
   }
 
-  Future<NextPayoutEstimate?> getNextPayoutEstimate() async {
-    final projects = await (_database.select(_database.appProjects)
-          ..where((table) => table.enabled.equals(true))
-          ..where((table) => table.payoutRule.equals('none').not()))
-        .get();
-    if (projects.isEmpty) {
-      return null;
-    }
-
-    final range = currentWeekRange();
-    final timesheets = await _timesheetsInRange(range.begin, range.end);
-    final amountMinor = timesheets.fold<int>(
-      0,
-      (sum, item) => sum + (item.amountMinor ?? 0),
-    );
-
-    return NextPayoutEstimate(
-      rule: projects.first.payoutRule,
-      estimatedDate: _nextPayoutDate(projects.first.payoutRule, DateTime.now()),
-      amountMinor: amountMinor,
-    );
-  }
-
   Future<void> upsertTimesheets(List<KimaiTimesheetDto> timesheets) async {
     final projects = await _database.select(_database.appProjects).get();
 
@@ -435,6 +400,8 @@ class TimesheetsRepository {
     List<AppProject> appProjects,
   ) async {
     final now = DateTime.now().toUtc();
+    final rateHistory =
+        await _database.select(_database.projectRateHistory).get();
     final projectsByKimaiId = {
       for (final project in appProjects)
         if (project.kimaiProjectId != null) project.kimaiProjectId!: project,
@@ -458,8 +425,11 @@ class TimesheetsRepository {
               amountMinor: Value(
                 _calculateAmountMinor(
                   durationSeconds: item.durationSeconds,
-                  hourlyRateMinor:
-                      projectsByKimaiId[item.projectId]?.hourlyRateMinor,
+                  hourlyRateMinor: _rateForTimesheet(
+                    project: projectsByKimaiId[item.projectId],
+                    rateHistory: rateHistory,
+                    beginAt: item.beginAt,
+                  ),
                 ),
               ),
               currency: const Value('RUB'),
@@ -592,7 +562,7 @@ class TimesheetsRepository {
           projectColor: row.readTableOrNull(_database.appProjects)?.color ??
               row.readTableOrNull(_database.kimaiProjects)?.color,
           hourlyRateMinor:
-              row.readTableOrNull(_database.appProjects)?.hourlyRateMinor,
+              _displayRateMinor(row.readTable(_database.timesheets)),
         ),
     ];
   }
@@ -639,10 +609,6 @@ final weeklyProgressHistoryProvider =
   return ref.watch(timesheetsRepositoryProvider).watchWeeklyProgressHistory();
 });
 
-final nextPayoutEstimateProvider = FutureProvider<NextPayoutEstimate?>((ref) {
-  return ref.watch(timesheetsRepositoryProvider).getNextPayoutEstimate();
-});
-
 ({DateTime begin, DateTime end}) currentWeekRange() {
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
@@ -662,14 +628,38 @@ int? _calculateAmountMinor({
   return (durationSeconds * hourlyRateMinor / 3600).round();
 }
 
-DateTime _nextPayoutDate(String rule, DateTime from) {
-  final today = DateTime(from.year, from.month, from.day);
+int? _rateForTimesheet({
+  required AppProject? project,
+  required List<ProjectRateHistoryData> rateHistory,
+  required DateTime beginAt,
+}) {
+  if (project == null) {
+    return null;
+  }
 
-  return switch (rule) {
-    'biweekly' => today.add(Duration(days: 14 - (today.weekday % 14))),
-    'triweekly' => today.add(Duration(days: 21 - (today.weekday % 21))),
-    'monthly' => DateTime(today.year, today.month + 1),
-    'custom_dates' => today,
-    _ => today,
-  };
+  final projectRates =
+      rateHistory.where((rate) => rate.projectId == project.id).toList();
+  final matching = projectRates
+      .where(
+        (rate) =>
+            !beginAt.isBefore(rate.effectiveFrom) &&
+            (rate.effectiveTo == null || beginAt.isBefore(rate.effectiveTo!)),
+      )
+      .toList()
+    ..sort((a, b) => b.effectiveFrom.compareTo(a.effectiveFrom));
+
+  if (matching.isNotEmpty) {
+    return matching.first.hourlyRateMinor;
+  }
+
+  return projectRates.isEmpty ? project.hourlyRateMinor : null;
+}
+
+int? _displayRateMinor(Timesheet timesheet) {
+  final amountMinor = timesheet.amountMinor;
+  if (amountMinor == null || timesheet.durationSeconds <= 0) {
+    return null;
+  }
+
+  return (amountMinor * 3600 / timesheet.durationSeconds).round();
 }

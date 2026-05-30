@@ -2243,6 +2243,370 @@ class PayoutDatesCompanion extends UpdateCompanion<PayoutDate> {
   }
 }
 
+class $ProjectRateHistoryTable extends ProjectRateHistory
+    with TableInfo<$ProjectRateHistoryTable, ProjectRateHistoryData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ProjectRateHistoryTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+      'id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _projectIdMeta =
+      const VerificationMeta('projectId');
+  @override
+  late final GeneratedColumn<String> projectId = GeneratedColumn<String>(
+      'project_id', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: true,
+      $customConstraints: 'NOT NULL REFERENCES app_projects(id)');
+  static const VerificationMeta _hourlyRateMinorMeta =
+      const VerificationMeta('hourlyRateMinor');
+  @override
+  late final GeneratedColumn<int> hourlyRateMinor = GeneratedColumn<int>(
+      'hourly_rate_minor', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _effectiveFromMeta =
+      const VerificationMeta('effectiveFrom');
+  @override
+  late final GeneratedColumn<DateTime> effectiveFrom =
+      GeneratedColumn<DateTime>('effective_from', aliasedName, false,
+          type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _effectiveToMeta =
+      const VerificationMeta('effectiveTo');
+  @override
+  late final GeneratedColumn<DateTime> effectiveTo = GeneratedColumn<DateTime>(
+      'effective_to', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns =>
+      [id, projectId, hourlyRateMinor, effectiveFrom, effectiveTo, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'project_rate_history';
+  @override
+  VerificationContext validateIntegrity(
+      Insertable<ProjectRateHistoryData> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(_projectIdMeta,
+          projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta));
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('hourly_rate_minor')) {
+      context.handle(
+          _hourlyRateMinorMeta,
+          hourlyRateMinor.isAcceptableOrUnknown(
+              data['hourly_rate_minor']!, _hourlyRateMinorMeta));
+    } else if (isInserting) {
+      context.missing(_hourlyRateMinorMeta);
+    }
+    if (data.containsKey('effective_from')) {
+      context.handle(
+          _effectiveFromMeta,
+          effectiveFrom.isAcceptableOrUnknown(
+              data['effective_from']!, _effectiveFromMeta));
+    } else if (isInserting) {
+      context.missing(_effectiveFromMeta);
+    }
+    if (data.containsKey('effective_to')) {
+      context.handle(
+          _effectiveToMeta,
+          effectiveTo.isAcceptableOrUnknown(
+              data['effective_to']!, _effectiveToMeta));
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ProjectRateHistoryData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ProjectRateHistoryData(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}id'])!,
+      projectId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}project_id'])!,
+      hourlyRateMinor: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}hourly_rate_minor'])!,
+      effectiveFrom: attachedDatabase.typeMapping.read(
+          DriftSqlType.dateTime, data['${effectivePrefix}effective_from'])!,
+      effectiveTo: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}effective_to']),
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+    );
+  }
+
+  @override
+  $ProjectRateHistoryTable createAlias(String alias) {
+    return $ProjectRateHistoryTable(attachedDatabase, alias);
+  }
+}
+
+class ProjectRateHistoryData extends DataClass
+    implements Insertable<ProjectRateHistoryData> {
+  final String id;
+  final String projectId;
+  final int hourlyRateMinor;
+  final DateTime effectiveFrom;
+  final DateTime? effectiveTo;
+  final DateTime createdAt;
+  const ProjectRateHistoryData(
+      {required this.id,
+      required this.projectId,
+      required this.hourlyRateMinor,
+      required this.effectiveFrom,
+      this.effectiveTo,
+      required this.createdAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['project_id'] = Variable<String>(projectId);
+    map['hourly_rate_minor'] = Variable<int>(hourlyRateMinor);
+    map['effective_from'] = Variable<DateTime>(effectiveFrom);
+    if (!nullToAbsent || effectiveTo != null) {
+      map['effective_to'] = Variable<DateTime>(effectiveTo);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  ProjectRateHistoryCompanion toCompanion(bool nullToAbsent) {
+    return ProjectRateHistoryCompanion(
+      id: Value(id),
+      projectId: Value(projectId),
+      hourlyRateMinor: Value(hourlyRateMinor),
+      effectiveFrom: Value(effectiveFrom),
+      effectiveTo: effectiveTo == null && nullToAbsent
+          ? const Value.absent()
+          : Value(effectiveTo),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory ProjectRateHistoryData.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ProjectRateHistoryData(
+      id: serializer.fromJson<String>(json['id']),
+      projectId: serializer.fromJson<String>(json['projectId']),
+      hourlyRateMinor: serializer.fromJson<int>(json['hourlyRateMinor']),
+      effectiveFrom: serializer.fromJson<DateTime>(json['effectiveFrom']),
+      effectiveTo: serializer.fromJson<DateTime?>(json['effectiveTo']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'projectId': serializer.toJson<String>(projectId),
+      'hourlyRateMinor': serializer.toJson<int>(hourlyRateMinor),
+      'effectiveFrom': serializer.toJson<DateTime>(effectiveFrom),
+      'effectiveTo': serializer.toJson<DateTime?>(effectiveTo),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  ProjectRateHistoryData copyWith(
+          {String? id,
+          String? projectId,
+          int? hourlyRateMinor,
+          DateTime? effectiveFrom,
+          Value<DateTime?> effectiveTo = const Value.absent(),
+          DateTime? createdAt}) =>
+      ProjectRateHistoryData(
+        id: id ?? this.id,
+        projectId: projectId ?? this.projectId,
+        hourlyRateMinor: hourlyRateMinor ?? this.hourlyRateMinor,
+        effectiveFrom: effectiveFrom ?? this.effectiveFrom,
+        effectiveTo: effectiveTo.present ? effectiveTo.value : this.effectiveTo,
+        createdAt: createdAt ?? this.createdAt,
+      );
+  ProjectRateHistoryData copyWithCompanion(ProjectRateHistoryCompanion data) {
+    return ProjectRateHistoryData(
+      id: data.id.present ? data.id.value : this.id,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      hourlyRateMinor: data.hourlyRateMinor.present
+          ? data.hourlyRateMinor.value
+          : this.hourlyRateMinor,
+      effectiveFrom: data.effectiveFrom.present
+          ? data.effectiveFrom.value
+          : this.effectiveFrom,
+      effectiveTo:
+          data.effectiveTo.present ? data.effectiveTo.value : this.effectiveTo,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProjectRateHistoryData(')
+          ..write('id: $id, ')
+          ..write('projectId: $projectId, ')
+          ..write('hourlyRateMinor: $hourlyRateMinor, ')
+          ..write('effectiveFrom: $effectiveFrom, ')
+          ..write('effectiveTo: $effectiveTo, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+      id, projectId, hourlyRateMinor, effectiveFrom, effectiveTo, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ProjectRateHistoryData &&
+          other.id == this.id &&
+          other.projectId == this.projectId &&
+          other.hourlyRateMinor == this.hourlyRateMinor &&
+          other.effectiveFrom == this.effectiveFrom &&
+          other.effectiveTo == this.effectiveTo &&
+          other.createdAt == this.createdAt);
+}
+
+class ProjectRateHistoryCompanion
+    extends UpdateCompanion<ProjectRateHistoryData> {
+  final Value<String> id;
+  final Value<String> projectId;
+  final Value<int> hourlyRateMinor;
+  final Value<DateTime> effectiveFrom;
+  final Value<DateTime?> effectiveTo;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const ProjectRateHistoryCompanion({
+    this.id = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.hourlyRateMinor = const Value.absent(),
+    this.effectiveFrom = const Value.absent(),
+    this.effectiveTo = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ProjectRateHistoryCompanion.insert({
+    required String id,
+    required String projectId,
+    required int hourlyRateMinor,
+    required DateTime effectiveFrom,
+    this.effectiveTo = const Value.absent(),
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  })  : id = Value(id),
+        projectId = Value(projectId),
+        hourlyRateMinor = Value(hourlyRateMinor),
+        effectiveFrom = Value(effectiveFrom),
+        createdAt = Value(createdAt);
+  static Insertable<ProjectRateHistoryData> custom({
+    Expression<String>? id,
+    Expression<String>? projectId,
+    Expression<int>? hourlyRateMinor,
+    Expression<DateTime>? effectiveFrom,
+    Expression<DateTime>? effectiveTo,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (projectId != null) 'project_id': projectId,
+      if (hourlyRateMinor != null) 'hourly_rate_minor': hourlyRateMinor,
+      if (effectiveFrom != null) 'effective_from': effectiveFrom,
+      if (effectiveTo != null) 'effective_to': effectiveTo,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ProjectRateHistoryCompanion copyWith(
+      {Value<String>? id,
+      Value<String>? projectId,
+      Value<int>? hourlyRateMinor,
+      Value<DateTime>? effectiveFrom,
+      Value<DateTime?>? effectiveTo,
+      Value<DateTime>? createdAt,
+      Value<int>? rowid}) {
+    return ProjectRateHistoryCompanion(
+      id: id ?? this.id,
+      projectId: projectId ?? this.projectId,
+      hourlyRateMinor: hourlyRateMinor ?? this.hourlyRateMinor,
+      effectiveFrom: effectiveFrom ?? this.effectiveFrom,
+      effectiveTo: effectiveTo ?? this.effectiveTo,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<String>(projectId.value);
+    }
+    if (hourlyRateMinor.present) {
+      map['hourly_rate_minor'] = Variable<int>(hourlyRateMinor.value);
+    }
+    if (effectiveFrom.present) {
+      map['effective_from'] = Variable<DateTime>(effectiveFrom.value);
+    }
+    if (effectiveTo.present) {
+      map['effective_to'] = Variable<DateTime>(effectiveTo.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProjectRateHistoryCompanion(')
+          ..write('id: $id, ')
+          ..write('projectId: $projectId, ')
+          ..write('hourlyRateMinor: $hourlyRateMinor, ')
+          ..write('effectiveFrom: $effectiveFrom, ')
+          ..write('effectiveTo: $effectiveTo, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $TimesheetsTable extends Timesheets
     with TableInfo<$TimesheetsTable, Timesheet> {
   @override
@@ -4016,6 +4380,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $KimaiProjectsTable kimaiProjects = $KimaiProjectsTable(this);
   late final $AppProjectsTable appProjects = $AppProjectsTable(this);
   late final $PayoutDatesTable payoutDates = $PayoutDatesTable(this);
+  late final $ProjectRateHistoryTable projectRateHistory =
+      $ProjectRateHistoryTable(this);
   late final $TimesheetsTable timesheets = $TimesheetsTable(this);
   late final $PaymentsTable payments = $PaymentsTable(this);
   late final $SyncLogsTable syncLogs = $SyncLogsTable(this);
@@ -4029,6 +4395,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         kimaiProjects,
         appProjects,
         payoutDates,
+        projectRateHistory,
         timesheets,
         payments,
         syncLogs
@@ -4912,6 +5279,24 @@ final class $$AppProjectsTableReferences
         manager.$state.copyWith(prefetchedData: cache));
   }
 
+  static MultiTypedResultKey<$ProjectRateHistoryTable,
+      List<ProjectRateHistoryData>> _projectRateHistoryRefsTable(
+          _$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(db.projectRateHistory,
+          aliasName: $_aliasNameGenerator(
+              db.appProjects.id, db.projectRateHistory.projectId));
+
+  $$ProjectRateHistoryTableProcessedTableManager get projectRateHistoryRefs {
+    final manager = $$ProjectRateHistoryTableTableManager(
+            $_db, $_db.projectRateHistory)
+        .filter((f) => f.projectId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache =
+        $_typedResult.readTableOrNull(_projectRateHistoryRefsTable($_db));
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: cache));
+  }
+
   static MultiTypedResultKey<$TimesheetsTable, List<Timesheet>>
       _timesheetsRefsTable(_$AppDatabase db) =>
           MultiTypedResultKey.fromTable(db.timesheets,
@@ -5012,6 +5397,27 @@ class $$AppProjectsTableFilterComposer
             $$PayoutDatesTableFilterComposer(
               $db: $db,
               $table: $db.payoutDates,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
+
+  Expression<bool> projectRateHistoryRefs(
+      Expression<bool> Function($$ProjectRateHistoryTableFilterComposer f) f) {
+    final $$ProjectRateHistoryTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.projectRateHistory,
+        getReferencedColumn: (t) => t.projectId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$ProjectRateHistoryTableFilterComposer(
+              $db: $db,
+              $table: $db.projectRateHistory,
               $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
               joinBuilder: joinBuilder,
               $removeJoinBuilderFromRootComposer:
@@ -5203,6 +5609,28 @@ class $$AppProjectsTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> projectRateHistoryRefs<T extends Object>(
+      Expression<T> Function($$ProjectRateHistoryTableAnnotationComposer a) f) {
+    final $$ProjectRateHistoryTableAnnotationComposer composer =
+        $composerBuilder(
+            composer: this,
+            getCurrentColumn: (t) => t.id,
+            referencedTable: $db.projectRateHistory,
+            getReferencedColumn: (t) => t.projectId,
+            builder: (joinBuilder,
+                    {$addJoinBuilderToRootComposer,
+                    $removeJoinBuilderFromRootComposer}) =>
+                $$ProjectRateHistoryTableAnnotationComposer(
+                  $db: $db,
+                  $table: $db.projectRateHistory,
+                  $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                  joinBuilder: joinBuilder,
+                  $removeJoinBuilderFromRootComposer:
+                      $removeJoinBuilderFromRootComposer,
+                ));
+    return f(composer);
+  }
+
   Expression<T> timesheetsRefs<T extends Object>(
       Expression<T> Function($$TimesheetsTableAnnotationComposer a) f) {
     final $$TimesheetsTableAnnotationComposer composer = $composerBuilder(
@@ -5237,7 +5665,10 @@ class $$AppProjectsTableTableManager extends RootTableManager<
     (AppProject, $$AppProjectsTableReferences),
     AppProject,
     PrefetchHooks Function(
-        {bool kimaiProjectId, bool payoutDatesRefs, bool timesheetsRefs})> {
+        {bool kimaiProjectId,
+        bool payoutDatesRefs,
+        bool projectRateHistoryRefs,
+        bool timesheetsRefs})> {
   $$AppProjectsTableTableManager(_$AppDatabase db, $AppProjectsTable table)
       : super(TableManagerState(
           db: db,
@@ -5325,11 +5756,13 @@ class $$AppProjectsTableTableManager extends RootTableManager<
           prefetchHooksCallback: (
               {kimaiProjectId = false,
               payoutDatesRefs = false,
+              projectRateHistoryRefs = false,
               timesheetsRefs = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [
                 if (payoutDatesRefs) db.payoutDates,
+                if (projectRateHistoryRefs) db.projectRateHistory,
                 if (timesheetsRefs) db.timesheets
               ],
               addJoins: <
@@ -5374,6 +5807,19 @@ class $$AppProjectsTableTableManager extends RootTableManager<
                             (item, referencedItems) => referencedItems
                                 .where((e) => e.appProjectId == item.id),
                         typedResults: items),
+                  if (projectRateHistoryRefs)
+                    await $_getPrefetchedData<AppProject, $AppProjectsTable,
+                            ProjectRateHistoryData>(
+                        currentTable: table,
+                        referencedTable: $$AppProjectsTableReferences
+                            ._projectRateHistoryRefsTable(db),
+                        managerFromTypedResult: (p0) =>
+                            $$AppProjectsTableReferences(db, table, p0)
+                                .projectRateHistoryRefs,
+                        referencedItemsForCurrentItem:
+                            (item, referencedItems) => referencedItems
+                                .where((e) => e.projectId == item.id),
+                        typedResults: items),
                   if (timesheetsRefs)
                     await $_getPrefetchedData<AppProject, $AppProjectsTable,
                             Timesheet>(
@@ -5406,7 +5852,10 @@ typedef $$AppProjectsTableProcessedTableManager = ProcessedTableManager<
     (AppProject, $$AppProjectsTableReferences),
     AppProject,
     PrefetchHooks Function(
-        {bool kimaiProjectId, bool payoutDatesRefs, bool timesheetsRefs})>;
+        {bool kimaiProjectId,
+        bool payoutDatesRefs,
+        bool projectRateHistoryRefs,
+        bool timesheetsRefs})>;
 typedef $$PayoutDatesTableCreateCompanionBuilder = PayoutDatesCompanion
     Function({
   required String id,
@@ -5729,6 +6178,303 @@ typedef $$PayoutDatesTableProcessedTableManager = ProcessedTableManager<
     (PayoutDate, $$PayoutDatesTableReferences),
     PayoutDate,
     PrefetchHooks Function({bool appProjectId})>;
+typedef $$ProjectRateHistoryTableCreateCompanionBuilder
+    = ProjectRateHistoryCompanion Function({
+  required String id,
+  required String projectId,
+  required int hourlyRateMinor,
+  required DateTime effectiveFrom,
+  Value<DateTime?> effectiveTo,
+  required DateTime createdAt,
+  Value<int> rowid,
+});
+typedef $$ProjectRateHistoryTableUpdateCompanionBuilder
+    = ProjectRateHistoryCompanion Function({
+  Value<String> id,
+  Value<String> projectId,
+  Value<int> hourlyRateMinor,
+  Value<DateTime> effectiveFrom,
+  Value<DateTime?> effectiveTo,
+  Value<DateTime> createdAt,
+  Value<int> rowid,
+});
+
+final class $$ProjectRateHistoryTableReferences extends BaseReferences<
+    _$AppDatabase, $ProjectRateHistoryTable, ProjectRateHistoryData> {
+  $$ProjectRateHistoryTableReferences(
+      super.$_db, super.$_table, super.$_typedResult);
+
+  static $AppProjectsTable _projectIdTable(_$AppDatabase db) =>
+      db.appProjects.createAlias($_aliasNameGenerator(
+          db.projectRateHistory.projectId, db.appProjects.id));
+
+  $$AppProjectsTableProcessedTableManager get projectId {
+    final $_column = $_itemColumn<String>('project_id')!;
+
+    final manager = $$AppProjectsTableTableManager($_db, $_db.appProjects)
+        .filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_projectIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: [item]));
+  }
+}
+
+class $$ProjectRateHistoryTableFilterComposer
+    extends Composer<_$AppDatabase, $ProjectRateHistoryTable> {
+  $$ProjectRateHistoryTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get hourlyRateMinor => $composableBuilder(
+      column: $table.hourlyRateMinor,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get effectiveFrom => $composableBuilder(
+      column: $table.effectiveFrom, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get effectiveTo => $composableBuilder(
+      column: $table.effectiveTo, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+
+  $$AppProjectsTableFilterComposer get projectId {
+    final $$AppProjectsTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.projectId,
+        referencedTable: $db.appProjects,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$AppProjectsTableFilterComposer(
+              $db: $db,
+              $table: $db.appProjects,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+}
+
+class $$ProjectRateHistoryTableOrderingComposer
+    extends Composer<_$AppDatabase, $ProjectRateHistoryTable> {
+  $$ProjectRateHistoryTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get hourlyRateMinor => $composableBuilder(
+      column: $table.hourlyRateMinor,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get effectiveFrom => $composableBuilder(
+      column: $table.effectiveFrom,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get effectiveTo => $composableBuilder(
+      column: $table.effectiveTo, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+
+  $$AppProjectsTableOrderingComposer get projectId {
+    final $$AppProjectsTableOrderingComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.projectId,
+        referencedTable: $db.appProjects,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$AppProjectsTableOrderingComposer(
+              $db: $db,
+              $table: $db.appProjects,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+}
+
+class $$ProjectRateHistoryTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ProjectRateHistoryTable> {
+  $$ProjectRateHistoryTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get hourlyRateMinor => $composableBuilder(
+      column: $table.hourlyRateMinor, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get effectiveFrom => $composableBuilder(
+      column: $table.effectiveFrom, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get effectiveTo => $composableBuilder(
+      column: $table.effectiveTo, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$AppProjectsTableAnnotationComposer get projectId {
+    final $$AppProjectsTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.projectId,
+        referencedTable: $db.appProjects,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$AppProjectsTableAnnotationComposer(
+              $db: $db,
+              $table: $db.appProjects,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+}
+
+class $$ProjectRateHistoryTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $ProjectRateHistoryTable,
+    ProjectRateHistoryData,
+    $$ProjectRateHistoryTableFilterComposer,
+    $$ProjectRateHistoryTableOrderingComposer,
+    $$ProjectRateHistoryTableAnnotationComposer,
+    $$ProjectRateHistoryTableCreateCompanionBuilder,
+    $$ProjectRateHistoryTableUpdateCompanionBuilder,
+    (ProjectRateHistoryData, $$ProjectRateHistoryTableReferences),
+    ProjectRateHistoryData,
+    PrefetchHooks Function({bool projectId})> {
+  $$ProjectRateHistoryTableTableManager(
+      _$AppDatabase db, $ProjectRateHistoryTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ProjectRateHistoryTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ProjectRateHistoryTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ProjectRateHistoryTableAnnotationComposer(
+                  $db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> id = const Value.absent(),
+            Value<String> projectId = const Value.absent(),
+            Value<int> hourlyRateMinor = const Value.absent(),
+            Value<DateTime> effectiveFrom = const Value.absent(),
+            Value<DateTime?> effectiveTo = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ProjectRateHistoryCompanion(
+            id: id,
+            projectId: projectId,
+            hourlyRateMinor: hourlyRateMinor,
+            effectiveFrom: effectiveFrom,
+            effectiveTo: effectiveTo,
+            createdAt: createdAt,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String id,
+            required String projectId,
+            required int hourlyRateMinor,
+            required DateTime effectiveFrom,
+            Value<DateTime?> effectiveTo = const Value.absent(),
+            required DateTime createdAt,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ProjectRateHistoryCompanion.insert(
+            id: id,
+            projectId: projectId,
+            hourlyRateMinor: hourlyRateMinor,
+            effectiveFrom: effectiveFrom,
+            effectiveTo: effectiveTo,
+            createdAt: createdAt,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (
+                    e.readTable(table),
+                    $$ProjectRateHistoryTableReferences(db, table, e)
+                  ))
+              .toList(),
+          prefetchHooksCallback: ({projectId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins: <
+                  T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic>>(state) {
+                if (projectId) {
+                  state = state.withJoin(
+                    currentTable: table,
+                    currentColumn: table.projectId,
+                    referencedTable:
+                        $$ProjectRateHistoryTableReferences._projectIdTable(db),
+                    referencedColumn: $$ProjectRateHistoryTableReferences
+                        ._projectIdTable(db)
+                        .id,
+                  ) as T;
+                }
+
+                return state;
+              },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ));
+}
+
+typedef $$ProjectRateHistoryTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $ProjectRateHistoryTable,
+    ProjectRateHistoryData,
+    $$ProjectRateHistoryTableFilterComposer,
+    $$ProjectRateHistoryTableOrderingComposer,
+    $$ProjectRateHistoryTableAnnotationComposer,
+    $$ProjectRateHistoryTableCreateCompanionBuilder,
+    $$ProjectRateHistoryTableUpdateCompanionBuilder,
+    (ProjectRateHistoryData, $$ProjectRateHistoryTableReferences),
+    ProjectRateHistoryData,
+    PrefetchHooks Function({bool projectId})>;
 typedef $$TimesheetsTableCreateCompanionBuilder = TimesheetsCompanion Function({
   Value<int> id,
   Value<int?> kimaiProjectId,
@@ -6832,6 +7578,8 @@ class $AppDatabaseManager {
       $$AppProjectsTableTableManager(_db, _db.appProjects);
   $$PayoutDatesTableTableManager get payoutDates =>
       $$PayoutDatesTableTableManager(_db, _db.payoutDates);
+  $$ProjectRateHistoryTableTableManager get projectRateHistory =>
+      $$ProjectRateHistoryTableTableManager(_db, _db.projectRateHistory);
   $$TimesheetsTableTableManager get timesheets =>
       $$TimesheetsTableTableManager(_db, _db.timesheets);
   $$PaymentsTableTableManager get payments =>

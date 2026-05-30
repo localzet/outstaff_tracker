@@ -112,7 +112,7 @@ void main() {
     expect(periods[1].payoutDate, DateTime(2026, 5, 29));
   });
 
-  test('hourly rate change recalculates saved timesheet amount', () async {
+  test('hourly rate change keeps historical timesheet amount', () async {
     await projects.updateProjectSettings(
       appProjectId: 'kimai_1',
       hourlyRate: 200,
@@ -123,7 +123,10 @@ void main() {
           ..where((table) => table.id.equals(10)))
         .getSingle();
 
-    expect(row.amountMinor, 20000);
+    expect(row.amountMinor, 10000);
+
+    final rates = await database.select(database.projectRateHistory).get();
+    expect(rates.single.hourlyRateMinor, 20000);
   });
 
   test('weekly goal change updates progress history', () async {

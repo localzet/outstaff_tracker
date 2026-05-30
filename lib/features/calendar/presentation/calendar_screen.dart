@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_time_formats.dart';
@@ -30,10 +30,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final weekEnd = _weekStart.add(const Duration(days: 7));
     final filters = TimesheetFilters(begin: _weekStart, end: weekEnd);
     final entries = ref.watch(_calendarEntriesProvider(filters));
-    final moneyFormat = NumberFormat.simpleCurrency(name: 'RUB');
 
     return AppScreen(
-      title: 'Calendar',
+      title: 'Календарь',
       subtitle:
           '${DateTimeFormats.date.format(_weekStart)} - ${DateTimeFormats.date.format(weekEnd.subtract(const Duration(days: 1)))}',
       actions: [
@@ -42,19 +41,19 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             () => _weekStart = _weekStart.subtract(const Duration(days: 7)),
           ),
           icon: const Icon(Icons.chevron_left_rounded),
-          tooltip: 'Previous week',
+          tooltip: 'Предыдущая неделя',
         ),
         OutlinedButton(
           onPressed: () =>
               setState(() => _weekStart = _startOfWeek(DateTime.now())),
-          child: const Text('Today'),
+          child: const Text('Сегодня'),
         ),
         IconButton.filledTonal(
           onPressed: () => setState(
             () => _weekStart = _weekStart.add(const Duration(days: 7)),
           ),
           icon: const Icon(Icons.chevron_right_rounded),
-          tooltip: 'Next week',
+          tooltip: 'Следующая неделя',
         ),
       ],
       children: [
@@ -62,21 +61,18 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           data: (items) {
             if (items.isEmpty) {
               return const EmptyState(
-                title: 'No entries this week',
-                message: 'Sync Kimai to populate the weekly calendar.',
+                title: 'Нет записей на этой неделе',
+                message: 'Синхронизируйте Kimai или выберите другую неделю.',
               );
             }
 
-            return CalendarWeekView(
-              weekStart: _weekStart,
-              entries: items,
-              moneyFormat: moneyFormat,
-            );
+            return CalendarWeekView(weekStart: _weekStart, entries: items);
           },
           loading: () => const LinearProgressIndicator(),
           error: (error, stackTrace) => EmptyState(
-            title: 'Calendar is unavailable',
+            title: 'Календарь недоступен',
             message: error.toString(),
+            action: _CopyErrorButton(error: error),
           ),
         ),
       ],
@@ -94,13 +90,11 @@ class CalendarWeekView extends StatelessWidget {
   const CalendarWeekView({
     required this.weekStart,
     required this.entries,
-    required this.moneyFormat,
     super.key,
   });
 
   final DateTime weekStart;
   final List<TimesheetEntry> entries;
-  final NumberFormat moneyFormat;
 
   @override
   Widget build(BuildContext context) {
@@ -133,7 +127,7 @@ class CalendarWeekView extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Text(
-                'Weekly total: ${formatDurationSeconds(weeklySeconds)}',
+                'Итого за неделю: ${formatDurationSeconds(weeklySeconds)}',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
             ],
@@ -149,7 +143,6 @@ class CalendarWeekView extends StatelessWidget {
                     CalendarDayColumn(
                       day: day,
                       entries: grouped[day] ?? const [],
-                      moneyFormat: moneyFormat,
                     ),
                     const SizedBox(height: 12),
                   ],
@@ -176,7 +169,6 @@ class CalendarWeekView extends StatelessWidget {
                           child: CalendarDayColumn(
                             day: day,
                             entries: grouped[day] ?? const [],
-                            moneyFormat: moneyFormat,
                             framed: false,
                           ),
                         ),
@@ -202,14 +194,12 @@ class CalendarDayColumn extends StatelessWidget {
   const CalendarDayColumn({
     required this.day,
     required this.entries,
-    required this.moneyFormat,
     this.framed = true,
     super.key,
   });
 
   final DateTime day;
   final List<TimesheetEntry> entries;
-  final NumberFormat moneyFormat;
   final bool framed;
 
   @override
@@ -241,13 +231,10 @@ class CalendarDayColumn extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           if (entries.isEmpty)
-            Text('No time', style: Theme.of(context).textTheme.bodyMedium)
+            Text('Нет времени', style: Theme.of(context).textTheme.bodyMedium)
           else
             for (final entry in entries) ...[
-              CalendarEventCard(
-                entry: entry,
-                moneyFormat: moneyFormat,
-              ),
+              CalendarEventCard(entry: entry),
               const SizedBox(height: 8),
             ],
         ],
@@ -263,14 +250,9 @@ class CalendarDayColumn extends StatelessWidget {
 }
 
 class CalendarEventCard extends StatelessWidget {
-  const CalendarEventCard({
-    required this.entry,
-    required this.moneyFormat,
-    super.key,
-  });
+  const CalendarEventCard({required this.entry, super.key});
 
   final TimesheetEntry entry;
-  final NumberFormat moneyFormat;
 
   @override
   Widget build(BuildContext context) {
@@ -282,10 +264,7 @@ class CalendarEventCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppRadii.sm),
       onTap: () => showDialog<void>(
         context: context,
-        builder: (context) => TimesheetDetailDialog(
-          entry: entry,
-          moneyFormat: moneyFormat,
-        ),
+        builder: (context) => TimesheetDetailDialog(entry: entry),
       ),
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -318,12 +297,12 @@ class CalendarEventCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${DateTimeFormats.time.format(begin)} - ${end == null ? 'running' : DateTimeFormats.time.format(end)}',
+                      '${DateTimeFormats.time.format(begin)} - ${end == null ? 'идёт' : DateTimeFormats.time.format(end)}',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${formatDurationSeconds(timesheet.durationSeconds)} · ${timesheet.description ?? timesheet.activityName ?? 'Work'}',
+                      '${formatDurationSeconds(timesheet.durationSeconds)} · ${timesheet.description ?? timesheet.activityName ?? 'Работа'}',
                       style: Theme.of(context).textTheme.bodyMedium,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -339,14 +318,9 @@ class CalendarEventCard extends StatelessWidget {
 }
 
 class TimesheetDetailDialog extends StatelessWidget {
-  const TimesheetDetailDialog({
-    required this.entry,
-    required this.moneyFormat,
-    super.key,
-  });
+  const TimesheetDetailDialog({required this.entry, super.key});
 
   final TimesheetEntry entry;
-  final NumberFormat moneyFormat;
 
   @override
   Widget build(BuildContext context) {
@@ -375,46 +349,46 @@ class TimesheetDetailDialog extends StatelessWidget {
               const SizedBox(height: 16),
               _DetailRow(label: 'Kimai id', value: timesheet.id.toString()),
               _DetailRow(
-                label: 'Activity',
+                label: 'Активность',
                 value: timesheet.activityName ?? '-',
               ),
               _DetailRow(
-                label: 'Description',
+                label: 'Описание',
                 value: timesheet.description ?? '-',
               ),
               _DetailRow(
-                label: 'Begin',
+                label: 'Начало',
                 value:
                     '${DateTimeFormats.date.format(begin)} ${DateTimeFormats.time.format(begin)}',
               ),
               _DetailRow(
-                label: 'End',
+                label: 'Конец',
                 value: end == null
-                    ? 'Running'
+                    ? 'Идёт'
                     : '${DateTimeFormats.date.format(end)} ${DateTimeFormats.time.format(end)}',
               ),
               _DetailRow(
-                label: 'Duration',
+                label: 'Длительность',
                 value: formatDurationSeconds(timesheet.durationSeconds),
               ),
               _DetailRow(
-                label: 'Rate',
+                label: 'Ставка',
                 value: entry.hourlyRateMinor == null
                     ? '-'
-                    : moneyFormat.format(entry.hourlyRateMinor! / 100),
+                    : formatMoneyRub(entry.hourlyRateMinor!),
               ),
               _DetailRow(
-                label: 'Amount',
+                label: 'Сумма',
                 value: timesheet.amountMinor == null
                     ? '-'
-                    : moneyFormat.format(timesheet.amountMinor! / 100),
+                    : formatMoneyRub(timesheet.amountMinor!),
               ),
               const SizedBox(height: 16),
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Close'),
+                  child: const Text('Закрыть'),
                 ),
               ),
             ],
@@ -447,6 +421,28 @@ class _DetailRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CopyErrorButton extends StatelessWidget {
+  const _CopyErrorButton({required this.error});
+
+  final Object error;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: () async {
+        await Clipboard.setData(ClipboardData(text: error.toString()));
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Ошибка скопирована')),
+          );
+        }
+      },
+      icon: const Icon(Icons.copy_rounded, size: 18),
+      label: const Text('Скопировать ошибку'),
     );
   }
 }
