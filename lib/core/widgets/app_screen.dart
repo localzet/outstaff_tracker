@@ -95,11 +95,13 @@ class EmptyState extends StatelessWidget {
   const EmptyState({
     required this.title,
     required this.message,
+    this.action,
     super.key,
   });
 
   final String title;
   final String message;
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
@@ -110,6 +112,10 @@ class EmptyState extends StatelessWidget {
           Text(title, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Text(message, style: Theme.of(context).textTheme.bodyMedium),
+          if (action != null) ...[
+            const SizedBox(height: 12),
+            action!,
+          ],
         ],
       ),
     );

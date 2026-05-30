@@ -7,8 +7,8 @@ class AppSettings {
 
   static const defaults = AppSettings(
     baseUrl: '',
-    currency: 'USD',
-    locale: 'en_US',
+    currency: 'RUB',
+    locale: 'ru_RU',
   );
 
   final String baseUrl;

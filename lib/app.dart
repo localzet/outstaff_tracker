@@ -10,6 +10,7 @@ import 'features/calendar/presentation/calendar_screen.dart';
 import 'features/dashboard/presentation/dashboard_screen.dart';
 import 'features/diagnostics/presentation/diagnostics_screen.dart';
 import 'features/onboarding/presentation/onboarding_screen.dart';
+import 'features/payments/presentation/payments_screen.dart';
 import 'features/projects/presentation/projects_screen.dart';
 import 'features/settings/data/settings_repository.dart';
 import 'features/settings/presentation/settings_screen.dart';
@@ -58,6 +59,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: ProjectsScreen.routePath,
             builder: (context, state) => const ProjectsScreen(),
+          ),
+          GoRoute(
+            path: PaymentsScreen.routePath,
+            builder: (context, state) => const PaymentsScreen(),
           ),
           GoRoute(
             path: AnalyticsScreen.routePath,
@@ -137,37 +142,42 @@ class AppShell extends StatelessWidget {
 
   static const _destinations = <NavigationDestinationData>[
     NavigationDestinationData(
-      label: 'Dashboard',
+      label: 'Дашборд',
       path: DashboardScreen.routePath,
       icon: Icons.grid_view_rounded,
     ),
     NavigationDestinationData(
-      label: 'Calendar',
+      label: 'Календарь',
       path: CalendarScreen.routePath,
       icon: Icons.calendar_month_rounded,
     ),
     NavigationDestinationData(
-      label: 'Timesheets',
+      label: 'Время',
       path: TimesheetsScreen.routePath,
       icon: Icons.timer_rounded,
     ),
     NavigationDestinationData(
-      label: 'Projects',
+      label: 'Проекты',
       path: ProjectsScreen.routePath,
       icon: Icons.folder_rounded,
     ),
     NavigationDestinationData(
-      label: 'Analytics',
+      label: 'Выплаты',
+      path: PaymentsScreen.routePath,
+      icon: Icons.payments_rounded,
+    ),
+    NavigationDestinationData(
+      label: 'Аналитика',
       path: AnalyticsScreen.routePath,
       icon: Icons.query_stats_rounded,
     ),
     NavigationDestinationData(
-      label: 'Settings',
+      label: 'Настройки',
       path: SettingsScreen.routePath,
       icon: Icons.settings_rounded,
     ),
     NavigationDestinationData(
-      label: 'Diagnostics',
+      label: 'Диагностика',
       path: DiagnosticsScreen.routePath,
       icon: Icons.health_and_safety_rounded,
     ),

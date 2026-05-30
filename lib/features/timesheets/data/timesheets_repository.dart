@@ -78,6 +78,27 @@ class TimesheetFilters {
   final String? searchText;
   final TimesheetSortField sortField;
   final bool sortAscending;
+
+  @override
+  bool operator ==(Object other) {
+    return other is TimesheetFilters &&
+        other.begin == begin &&
+        other.end == end &&
+        other.appProjectId == appProjectId &&
+        other.searchText == searchText &&
+        other.sortField == sortField &&
+        other.sortAscending == sortAscending;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        begin,
+        end,
+        appProjectId,
+        searchText,
+        sortField,
+        sortAscending,
+      );
 }
 
 class TimesheetEntry {
@@ -323,9 +344,7 @@ class TimesheetsRepository {
                       projectsByKimaiId[item.projectId]?.hourlyRateMinor,
                 ),
               ),
-              currency: Value(
-                item.currency ?? projectsByKimaiId[item.projectId]?.currency,
-              ),
+              currency: const Value('RUB'),
               exported: Value(item.exported),
               tags: Value(item.tags),
               kimaiUpdatedAt: Value(item.updatedAt),

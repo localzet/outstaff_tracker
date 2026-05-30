@@ -258,6 +258,38 @@ class AnalyticsRepository {
     );
   }
 
+  Stream<AnalyticsSnapshot> watchSnapshot() {
+    return _database
+        .customSelect(
+          'SELECT COUNT(*) AS c FROM app_projects '
+          'UNION ALL SELECT COUNT(*) FROM payout_dates '
+          'UNION ALL SELECT COUNT(*) FROM timesheets',
+          readsFrom: {
+            _database.appProjects,
+            _database.payoutDates,
+            _database.timesheets,
+          },
+        )
+        .watch()
+        .asyncMap((_) => getSnapshot());
+  }
+
+  Stream<List<PayoutForecast>> watchPayoutForecasts() {
+    return _database
+        .customSelect(
+          'SELECT COUNT(*) AS c FROM app_projects '
+          'UNION ALL SELECT COUNT(*) FROM payout_dates '
+          'UNION ALL SELECT COUNT(*) FROM timesheets',
+          readsFrom: {
+            _database.appProjects,
+            _database.payoutDates,
+            _database.timesheets,
+          },
+        )
+        .watch()
+        .asyncMap((_) => getPayoutForecasts());
+  }
+
   Future<PeriodValue> _weeklyHours(DateTime begin) async {
     final end = begin.add(const Duration(days: 7));
     final timesheets = await _timesheetsInRange(begin, end);
@@ -381,12 +413,12 @@ final analyticsRepositoryProvider = Provider<AnalyticsRepository>((ref) {
   return AnalyticsRepository(ref.watch(appDatabaseProvider));
 });
 
-final analyticsSnapshotProvider = FutureProvider<AnalyticsSnapshot>((ref) {
-  return ref.watch(analyticsRepositoryProvider).getSnapshot();
+final analyticsSnapshotProvider = StreamProvider<AnalyticsSnapshot>((ref) {
+  return ref.watch(analyticsRepositoryProvider).watchSnapshot();
 });
 
-final payoutForecastsProvider = FutureProvider<List<PayoutForecast>>((ref) {
-  return ref.watch(analyticsRepositoryProvider).getPayoutForecasts();
+final payoutForecastsProvider = StreamProvider<List<PayoutForecast>>((ref) {
+  return ref.watch(analyticsRepositoryProvider).watchPayoutForecasts();
 });
 
 DateTime _startOfWeek(DateTime value) {

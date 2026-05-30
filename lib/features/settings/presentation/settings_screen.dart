@@ -33,8 +33,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _formKey = GlobalKey<FormState>();
   final _baseUrlController = TextEditingController();
   final _tokenController = TextEditingController();
-  final _currencyController = TextEditingController();
-  final _localeController = TextEditingController();
 
   bool _settingsLoaded = false;
   bool _saving = false;
@@ -44,8 +42,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void dispose() {
     _baseUrlController.dispose();
     _tokenController.dispose();
-    _currencyController.dispose();
-    _localeController.dispose();
     super.dispose();
   }
 
@@ -56,8 +52,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final syncState = ref.watch(syncControllerProvider);
 
     return AppScreen(
-      title: 'Settings',
-      subtitle: 'Kimai connection and local formatting preferences.',
+      title: 'Настройки',
+      subtitle: 'Подключение Kimai и безопасность данных.',
       children: [
         settings.when(
           data: (data) {
@@ -77,9 +73,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     TextFormField(
                       controller: _baseUrlController,
                       decoration: const InputDecoration(
-                        labelText: 'Base URL',
-                        hintText: 'Example: https://kimai.example.com',
-                        helperText: 'Do not include /api manually (optional)',
+                        labelText: 'Адрес Kimai',
+                        hintText: 'Например: https://kimai.example.com',
+                        helperText: '/api можно не указывать',
                       ),
                       validator: (value) {
                         return validateKimaiHostUrl(value ?? '');
@@ -89,42 +85,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     TextFormField(
                       controller: _tokenController,
                       decoration: const InputDecoration(
-                        labelText: 'API token',
-                        hintText: 'Stored securely on this device',
+                        labelText: 'Токен API',
+                        hintText: 'Хранится защищённо на устройстве',
                       ),
                       obscureText: true,
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Formatting',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 16),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        SizedBox(
-                          width: 180,
-                          child: TextFormField(
-                            controller: _currencyController,
-                            decoration: const InputDecoration(
-                              labelText: 'Currency',
-                              hintText: 'USD',
-                            ),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 180,
-                          child: TextFormField(
-                            controller: _localeController,
-                            decoration: const InputDecoration(
-                              labelText: 'Locale',
-                              hintText: 'en_US',
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
                     const SizedBox(height: 24),
                     Wrap(
@@ -134,7 +98,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         FilledButton.icon(
                           onPressed: _saving ? null : () => _save(),
                           icon: const Icon(Icons.save_rounded, size: 18),
-                          label: Text(_saving ? 'Saving' : 'Save'),
+                          label: Text(_saving ? 'Сохранение' : 'Сохранить'),
                         ),
                         OutlinedButton.icon(
                           onPressed: _saving ? null : _connectKimai,
@@ -142,7 +106,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             Icons.wifi_tethering_rounded,
                             size: 18,
                           ),
-                          label: const Text('Connect'),
+                          label: const Text('Подключить'),
                         ),
                         OutlinedButton.icon(
                           onPressed: syncState.isSyncing
@@ -150,7 +114,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               : _runFullTimesheetSync,
                           icon: const Icon(Icons.history_rounded, size: 18),
                           label: Text(
-                            syncState.isSyncing ? 'Syncing' : 'Sync last year',
+                            syncState.isSyncing
+                                ? 'Синхронизация'
+                                : 'Синхронизировать год',
                           ),
                         ),
                       ],
@@ -169,7 +135,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           },
           loading: () => const LinearProgressIndicator(),
           error: (error, stackTrace) => EmptyState(
-            title: 'Settings are unavailable',
+            title: 'Настройки недоступны',
             message: error.toString(),
           ),
         ),
@@ -198,8 +164,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
 
     _baseUrlController.text = settings.baseUrl;
-    _currencyController.text = settings.currency;
-    _localeController.text = settings.locale;
     _settingsLoaded = true;
   }
 
@@ -212,12 +176,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     try {
       final settings = AppSettings(
         baseUrl: normalizeKimaiBaseUrl(_baseUrlController.text),
-        currency: _currencyController.text.trim().isEmpty
-            ? AppSettings.defaults.currency
-            : _currencyController.text.trim().toUpperCase(),
-        locale: _localeController.text.trim().isEmpty
-            ? AppSettings.defaults.locale
-            : _localeController.text.trim(),
+        currency: 'RUB',
+        locale: 'ru_RU',
       );
 
       await ref.read(settingsRepositoryProvider).saveSettings(settings);
@@ -234,7 +194,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
       if (mounted && showFeedback) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Settings saved')),
+          const SnackBar(content: Text('Настройки сохранены')),
         );
       }
 

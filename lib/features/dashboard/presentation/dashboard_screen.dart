@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_time_formats.dart';
 import '../../../core/widgets/app_screen.dart';
-import '../../analytics/data/analytics_repository.dart';
+import '../../payments/data/payments_repository.dart';
+import '../../payments/presentation/payments_screen.dart';
 import '../../sync/data/sync_controller.dart';
 import '../../timesheets/data/timesheets_repository.dart';
 
@@ -19,18 +20,17 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final summary = ref.watch(currentWeekSummaryProvider);
     final projectSummaries = ref.watch(projectWeekSummariesProvider);
-    final payoutForecasts = ref.watch(payoutForecastsProvider);
+    final payments = ref.watch(paymentsSnapshotProvider);
     final syncState = ref.watch(syncControllerProvider);
-    final currencyFormat = NumberFormat.simpleCurrency(name: 'RUB');
 
     return AppScreen(
-      title: 'Dashboard',
-      subtitle: 'Current week overview from local SQLite data.',
+      title: 'Обзор',
+      subtitle: 'Текущая неделя, доход и ближайшие выплаты.',
       actions: [
         FilledButton.icon(
           onPressed: syncState.isSyncing ? null : () => _syncNow(ref, context),
           icon: const Icon(Icons.sync_rounded, size: 18),
-          label: Text(syncState.isSyncing ? 'Syncing' : 'Sync now'),
+          label: Text(syncState.isSyncing ? 'Синхронизация' : 'Обновить'),
         ),
       ],
       children: [
@@ -40,7 +40,7 @@ class DashboardScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Last sync error',
+                  'Последняя ошибка синхронизации',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 8),
@@ -56,12 +56,12 @@ class DashboardScreen extends ConsumerWidget {
                     );
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Last error copied')),
+                        const SnackBar(content: Text('Ошибка скопирована')),
                       );
                     }
                   },
                   icon: const Icon(Icons.copy_rounded, size: 18),
-                  label: const Text('Copy last error'),
+                  label: const Text('Скопировать ошибку'),
                 ),
               ],
             ),
@@ -72,17 +72,17 @@ class DashboardScreen extends ConsumerWidget {
               final compact = constraints.maxWidth < 720;
               final tiles = [
                 MetricTile(
-                  label: 'Week hours',
-                  value: formatDurationMinutes(data.totalSeconds ~/ 60),
+                  label: 'Часы за неделю',
+                  value: formatDurationSeconds(data.totalSeconds),
                   icon: Icons.timer_rounded,
                 ),
                 MetricTile(
-                  label: 'Estimated income',
-                  value: currencyFormat.format(data.amountMinor / 100),
+                  label: 'Доход за неделю',
+                  value: formatMoneyRub(data.amountMinor),
                   icon: Icons.payments_rounded,
                 ),
                 MetricTile(
-                  label: 'Entries',
+                  label: 'Записи',
                   value: data.entryCount.toString(),
                   icon: Icons.list_alt_rounded,
                 ),
@@ -111,7 +111,7 @@ class DashboardScreen extends ConsumerWidget {
           ),
           loading: () => const LinearProgressIndicator(),
           error: (error, stackTrace) => EmptyState(
-            title: 'Dashboard is unavailable',
+            title: 'Обзор недоступен',
             message: error.toString(),
           ),
         ),
@@ -119,8 +119,8 @@ class DashboardScreen extends ConsumerWidget {
           data: (items) {
             if (items.isEmpty) {
               return const EmptyState(
-                title: 'No enabled projects',
-                message: 'Enable projects and set rates to populate progress.',
+                title: 'Нет активных проектов',
+                message: 'Включите проекты и укажите ставки.',
               );
             }
 
@@ -137,10 +137,7 @@ class DashboardScreen extends ConsumerWidget {
                     for (final item in items)
                       SizedBox(
                         width: cardWidth,
-                        child: ProjectProgressCard(
-                          summary: item,
-                          currencyFormat: currencyFormat,
-                        ),
+                        child: ProjectProgressCard(summary: item),
                       ),
                   ],
                 );
@@ -149,28 +146,25 @@ class DashboardScreen extends ConsumerWidget {
           },
           loading: () => const LinearProgressIndicator(),
           error: (error, stackTrace) => EmptyState(
-            title: 'Project progress is unavailable',
+            title: 'Прогресс по проектам недоступен',
             message: error.toString(),
           ),
         ),
-        payoutForecasts.when(
-          data: (forecasts) {
-            if (forecasts.isEmpty) {
+        payments.when(
+          data: (snapshot) {
+            final next = snapshot.nextExpected;
+            if (next.isEmpty) {
               return const EmptyState(
-                title: 'No payout rule configured',
-                message:
-                    'Configure a payout rule in Projects to see estimates.',
+                title: 'Нет ожидаемых выплат',
+                message: 'Настройте правила выплат в проектах.',
               );
             }
 
-            return PayoutForecastCards(
-              forecasts: forecasts,
-              currencyFormat: currencyFormat,
-            );
+            return NextPaymentsPanel(items: next);
           },
           loading: () => const LinearProgressIndicator(),
           error: (error, stackTrace) => EmptyState(
-            title: 'Payout estimate is unavailable',
+            title: 'Выплаты недоступны',
             message: error.toString(),
           ),
         ),
@@ -181,7 +175,7 @@ class DashboardScreen extends ConsumerWidget {
               SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Kimai token is stored in secure storage. Analytics are computed from the local database.',
+                  'Токен Kimai хранится защищённо. Данные остаются на этом устройстве.',
                 ),
               ),
             ],
@@ -196,13 +190,13 @@ class DashboardScreen extends ConsumerWidget {
       await ref.read(syncControllerProvider.notifier).runManualSync();
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Sync completed')),
+          const SnackBar(content: Text('Синхронизация завершена')),
         );
       }
     } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Sync failed: $error')),
+          SnackBar(content: Text('Ошибка синхронизации: $error')),
         );
       }
     }
@@ -210,14 +204,9 @@ class DashboardScreen extends ConsumerWidget {
 }
 
 class ProjectProgressCard extends StatelessWidget {
-  const ProjectProgressCard({
-    required this.summary,
-    required this.currencyFormat,
-    super.key,
-  });
+  const ProjectProgressCard({required this.summary, super.key});
 
   final ProjectWeekSummary summary;
-  final NumberFormat currencyFormat;
 
   @override
   Widget build(BuildContext context) {
@@ -257,12 +246,12 @@ class ProjectProgressCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            '${summary.hours.toStringAsFixed(1)}h / ${goal?.toStringAsFixed(1) ?? '0'}h · ${summary.progressPercent.toStringAsFixed(0)}%',
+            '${formatDurationSeconds(summary.totalSeconds)} / ${_formatGoal(goal)} · ${summary.progressPercent.toStringAsFixed(0)}%',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 6),
           Text(
-            currencyFormat.format(summary.amountMinor / 100),
+            formatMoneyRub(summary.amountMinor),
             style: Theme.of(context).textTheme.titleMedium,
           ),
         ],
@@ -270,82 +259,87 @@ class ProjectProgressCard extends StatelessWidget {
     );
   }
 
-  Color _parseColor(String? value) {
-    if (value == null || !value.startsWith('#') || value.length != 7) {
-      return AppColors.textMuted;
+  String _formatGoal(double? goal) {
+    if (goal == null || goal <= 0) {
+      return '0 мин';
     }
 
-    final parsed = int.tryParse(value.substring(1), radix: 16);
-    if (parsed == null) {
-      return AppColors.textMuted;
-    }
-
-    return Color(0xFF000000 | parsed);
+    return formatDurationRu(Duration(minutes: (goal * 60).round()));
   }
 }
 
-class PayoutForecastCards extends StatelessWidget {
-  const PayoutForecastCards({
-    required this.forecasts,
-    required this.currencyFormat,
-    super.key,
-  });
+class NextPaymentsPanel extends StatelessWidget {
+  const NextPaymentsPanel({required this.items, super.key});
 
-  final List<PayoutForecast> forecasts;
-  final NumberFormat currencyFormat;
+  final List<PaymentItem> items;
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth < 760
-            ? constraints.maxWidth
-            : (constraints.maxWidth - 12) / 2;
-
-        return Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            for (final forecast in forecasts.take(4))
-              SizedBox(
-                width: width,
-                child: AppPanel(
-                  child: Row(
+    return AppPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Ближайшие выплаты',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              TextButton(
+                onPressed: () => context.go(PaymentsScreen.routePath),
+                child: const Text('Все выплаты'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          for (final item in items) ...[
+            Row(
+              children: [
+                const Icon(
+                  Icons.event_available_rounded,
+                  color: AppColors.textMuted,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(
-                        Icons.event_available_rounded,
-                        color: AppColors.textMuted,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              forecast.projectName,
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${DateTimeFormats.date.format(forecast.nextPayoutDate)} · ${forecast.rule}',
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                          ],
-                        ),
+                      Text(
+                        item.projectName,
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
                       Text(
-                        currencyFormat.format(
-                          forecast.unpaidAmountMinor / 100,
-                        ),
-                        style: Theme.of(context).textTheme.titleMedium,
+                        '${DateTimeFormats.date.format(item.payoutDate)} · ${DateTimeFormats.date.format(item.periodStart)} - ${DateTimeFormats.date.format(item.periodEnd.subtract(const Duration(days: 1)))}',
+                        style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ],
                   ),
                 ),
-              ),
+                Text(
+                  formatMoneyRub(item.expectedAmountMinor),
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ],
+            ),
+            if (item != items.last) const Divider(height: 20),
           ],
-        );
-      },
+        ],
+      ),
     );
   }
+}
+
+Color _parseColor(String? value) {
+  if (value == null || !value.startsWith('#') || value.length != 7) {
+    return AppColors.textMuted;
+  }
+
+  final parsed = int.tryParse(value.substring(1), radix: 16);
+  if (parsed == null) {
+    return AppColors.textMuted;
+  }
+
+  return Color(0xFF000000 | parsed);
 }

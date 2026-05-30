@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_time_formats.dart';
@@ -46,11 +45,10 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
     final entries = ref.watch(_filteredTimesheetsProvider(filters));
     final totals = ref.watch(_timesheetTotalsProvider(filters));
     final projects = ref.watch(_availableProjectsProvider);
-    final moneyFormat = NumberFormat.simpleCurrency(name: 'RUB');
 
     return AppScreen(
-      title: 'Timesheets',
-      subtitle: 'Raw tracked time from the local SQLite cache.',
+      title: 'Учёт времени',
+      subtitle: 'Записи времени из Kimai.',
       children: [
         AppPanel(
           child: Wrap(
@@ -72,12 +70,12 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
                   data: (items) => DropdownButtonFormField<String?>(
                     initialValue: _projectId,
                     isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'Project'),
+                    decoration: const InputDecoration(labelText: 'Проект'),
                     items: [
                       const DropdownMenuItem(
                         value: null,
                         child: Text(
-                          'All projects',
+                          'Все проекты',
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -100,7 +98,7 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
                 width: 260,
                 child: TextField(
                   decoration: const InputDecoration(
-                    labelText: 'Activity or description',
+                    labelText: 'Активность или описание',
                     prefixIcon: Icon(Icons.search_rounded, size: 18),
                   ),
                   onChanged: (value) => setState(() => _searchText = value),
@@ -111,22 +109,22 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
                 child: DropdownButtonFormField<TimesheetSortField>(
                   initialValue: _sortField,
                   isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Sort by'),
+                  decoration: const InputDecoration(labelText: 'Сортировка'),
                   items: const [
                     DropdownMenuItem(
                       value: TimesheetSortField.date,
-                      child: Text('Date', overflow: TextOverflow.ellipsis),
+                      child: Text('Дата', overflow: TextOverflow.ellipsis),
                     ),
                     DropdownMenuItem(
                       value: TimesheetSortField.duration,
                       child: Text(
-                        'Duration',
+                        'Длительность',
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     DropdownMenuItem(
                       value: TimesheetSortField.amount,
-                      child: Text('Amount', overflow: TextOverflow.ellipsis),
+                      child: Text('Сумма', overflow: TextOverflow.ellipsis),
                     ),
                   ],
                   onChanged: (value) {
@@ -144,12 +142,12 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
                       ? Icons.arrow_upward_rounded
                       : Icons.arrow_downward_rounded,
                 ),
-                tooltip: _sortAscending ? 'Ascending' : 'Descending',
+                tooltip: _sortAscending ? 'По возрастанию' : 'По убыванию',
               ),
               OutlinedButton.icon(
                 onPressed: () => _exportCsv(filters),
                 icon: const Icon(Icons.download_rounded, size: 18),
-                label: const Text('Export CSV'),
+                label: const Text('Экспорт CSV'),
               ),
             ],
           ),
@@ -157,11 +155,10 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
         totals.when(
           data: (value) => TimesheetTotalsBar(
             summary: value,
-            moneyFormat: moneyFormat,
           ),
           loading: () => const LinearProgressIndicator(),
           error: (error, stackTrace) => EmptyState(
-            title: 'Totals are unavailable',
+            title: 'Итоги недоступны',
             message: error.toString(),
           ),
         ),
@@ -169,20 +166,20 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
           data: (items) {
             if (items.isEmpty) {
               return const EmptyState(
-                title: 'No timesheets found',
-                message: 'Sync Kimai or adjust filters to see tracked time.',
+                title: 'Нет записей за выбранный период',
+                message: 'Синхронизируйте Kimai или измените фильтры.',
               );
             }
 
             return TimesheetsTable(
               entries: items,
-              moneyFormat: moneyFormat,
             );
           },
           loading: () => const LinearProgressIndicator(),
           error: (error, stackTrace) => EmptyState(
-            title: 'Timesheets are unavailable',
+            title: 'Записи недоступны',
             message: error.toString(),
+            action: _CopyErrorButton(error: error),
           ),
         ),
       ],
@@ -231,9 +228,7 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('CSV copied to clipboard (${entries.length} rows)'),
-        ),
+        SnackBar(content: Text('CSV скопирован: ${entries.length} строк')),
       );
     }
   }
@@ -246,6 +241,8 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
         'activity',
         'description',
         'duration_hours',
+        'duration_minutes',
+        'duration_human',
         'rate',
         'amount',
       ],
@@ -256,6 +253,8 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
           entry.timesheet.activityName ?? '',
           entry.timesheet.description ?? '',
           (entry.timesheet.durationSeconds / 3600).toStringAsFixed(2),
+          (entry.timesheet.durationSeconds ~/ 60).toString(),
+          formatDurationSeconds(entry.timesheet.durationSeconds),
           entry.hourlyRateMinor == null
               ? ''
               : (entry.hourlyRateMinor! / 100).toStringAsFixed(2),
@@ -283,12 +282,10 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
 class TimesheetTotalsBar extends StatelessWidget {
   const TimesheetTotalsBar({
     required this.summary,
-    required this.moneyFormat,
     super.key,
   });
 
   final TimesheetSummary summary;
-  final NumberFormat moneyFormat;
 
   @override
   Widget build(BuildContext context) {
@@ -298,15 +295,15 @@ class TimesheetTotalsBar extends StatelessWidget {
         runSpacing: 12,
         children: [
           _TotalItem(
-            label: 'Total hours',
+            label: 'Всего времени',
             value: formatDurationSeconds(summary.totalSeconds),
           ),
           _TotalItem(
-            label: 'Total amount',
-            value: moneyFormat.format(summary.amountMinor / 100),
+            label: 'Сумма',
+            value: formatMoneyRub(summary.amountMinor),
           ),
           _TotalItem(
-            label: 'Entries',
+            label: 'Записи',
             value: summary.entryCount.toString(),
           ),
         ],
@@ -318,12 +315,10 @@ class TimesheetTotalsBar extends StatelessWidget {
 class TimesheetsTable extends StatelessWidget {
   const TimesheetsTable({
     required this.entries,
-    required this.moneyFormat,
     super.key,
   });
 
   final List<TimesheetEntry> entries;
-  final NumberFormat moneyFormat;
 
   @override
   Widget build(BuildContext context) {
@@ -336,13 +331,13 @@ class TimesheetsTable extends StatelessWidget {
           dataTextStyle: Theme.of(context).textTheme.bodyMedium,
           dividerThickness: 1,
           columns: const [
-            DataColumn(label: Text('Date')),
-            DataColumn(label: Text('Project')),
-            DataColumn(label: Text('Activity')),
-            DataColumn(label: Text('Description')),
-            DataColumn(label: Text('Duration')),
-            DataColumn(label: Text('Hourly rate')),
-            DataColumn(label: Text('Amount')),
+            DataColumn(label: Text('Дата')),
+            DataColumn(label: Text('Проект')),
+            DataColumn(label: Text('Активность')),
+            DataColumn(label: Text('Описание')),
+            DataColumn(label: Text('Длительность')),
+            DataColumn(label: Text('Ставка')),
+            DataColumn(label: Text('Сумма')),
           ],
           rows: [
             for (final entry in entries)
@@ -382,15 +377,14 @@ class TimesheetsTable extends StatelessWidget {
                     Text(
                       entry.hourlyRateMinor == null
                           ? '-'
-                          : moneyFormat.format(entry.hourlyRateMinor! / 100),
+                          : formatMoneyRub(entry.hourlyRateMinor!),
                     ),
                   ),
                   DataCell(
                     Text(
                       entry.timesheet.amountMinor == null
                           ? '-'
-                          : moneyFormat
-                              .format(entry.timesheet.amountMinor! / 100),
+                          : formatMoneyRub(entry.timesheet.amountMinor!),
                     ),
                   ),
                 ],
@@ -454,6 +448,28 @@ class _ColorDot extends StatelessWidget {
     }
 
     return Color(0xFF000000 | parsed);
+  }
+}
+
+class _CopyErrorButton extends StatelessWidget {
+  const _CopyErrorButton({required this.error});
+
+  final Object error;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: () async {
+        await Clipboard.setData(ClipboardData(text: error.toString()));
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Ошибка скопирована')),
+          );
+        }
+      },
+      icon: const Icon(Icons.copy_rounded, size: 18),
+      label: const Text('Скопировать ошибку'),
+    );
   }
 }
 

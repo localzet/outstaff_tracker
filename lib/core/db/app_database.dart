@@ -52,7 +52,7 @@ class AppProjects extends Table {
   RealColumn get hourlyRate => real().nullable()();
   IntColumn get hourlyRateMinor => integer().nullable()();
   RealColumn get weeklyGoalHours => real().nullable()();
-  TextColumn get currency => text().withDefault(const Constant('USD'))();
+  TextColumn get currency => text().withDefault(const Constant('RUB'))();
   TextColumn get payoutRule => text().withDefault(const Constant('none'))();
   BoolColumn get archived => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime()();
@@ -68,7 +68,7 @@ class PayoutDates extends Table {
       text().customConstraint('NOT NULL REFERENCES app_projects(id)')();
   DateTimeColumn get payoutDate => dateTime()();
   RealColumn get expectedAmount => real().nullable()();
-  TextColumn get currency => text().withDefault(const Constant('USD'))();
+  TextColumn get currency => text().withDefault(const Constant('RUB'))();
   TextColumn get note => text().nullable()();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
@@ -101,6 +101,25 @@ class Timesheets extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
+class Payments extends Table {
+  TextColumn get id => text()();
+  IntColumn get kimaiProjectId =>
+      integer().customConstraint('NOT NULL REFERENCES kimai_projects(id)')();
+  DateTimeColumn get payoutDate => dateTime()();
+  DateTimeColumn get periodStart => dateTime()();
+  DateTimeColumn get periodEnd => dateTime()();
+  IntColumn get expectedAmountMinor => integer()();
+  IntColumn get actualAmountMinor => integer().nullable()();
+  TextColumn get status => text()();
+  DateTimeColumn get paidAt => dateTime().nullable()();
+  TextColumn get note => text().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
 class SyncLogs extends Table {
   TextColumn get id => text()();
   TextColumn get operation => text()();
@@ -123,6 +142,7 @@ class SyncLogs extends Table {
     AppProjects,
     PayoutDates,
     Timesheets,
+    Payments,
     SyncLogs,
   ],
 )
@@ -141,7 +161,7 @@ class AppDatabase extends _$AppDatabase {
         );
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -161,6 +181,9 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 5) {
             await m.addColumn(syncLogs, syncLogs.debug);
+          }
+          if (from < 6) {
+            await m.createTable(payments);
           }
         },
       );

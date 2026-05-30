@@ -1161,7 +1161,7 @@ class $AppProjectsTable extends AppProjects
       'currency', aliasedName, false,
       type: DriftSqlType.string,
       requiredDuringInsert: false,
-      defaultValue: const Constant('USD'));
+      defaultValue: const Constant('RUB'));
   static const VerificationMeta _payoutRuleMeta =
       const VerificationMeta('payoutRule');
   @override
@@ -1793,7 +1793,7 @@ class $PayoutDatesTable extends PayoutDates
       'currency', aliasedName, false,
       type: DriftSqlType.string,
       requiredDuringInsert: false,
-      defaultValue: const Constant('USD'));
+      defaultValue: const Constant('RUB'));
   static const VerificationMeta _noteMeta = const VerificationMeta('note');
   @override
   late final GeneratedColumn<String> note = GeneratedColumn<String>(
@@ -2927,6 +2927,618 @@ class TimesheetsCompanion extends UpdateCompanion<Timesheet> {
   }
 }
 
+class $PaymentsTable extends Payments with TableInfo<$PaymentsTable, Payment> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PaymentsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+      'id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _kimaiProjectIdMeta =
+      const VerificationMeta('kimaiProjectId');
+  @override
+  late final GeneratedColumn<int> kimaiProjectId = GeneratedColumn<int>(
+      'kimai_project_id', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: true,
+      $customConstraints: 'NOT NULL REFERENCES kimai_projects(id)');
+  static const VerificationMeta _payoutDateMeta =
+      const VerificationMeta('payoutDate');
+  @override
+  late final GeneratedColumn<DateTime> payoutDate = GeneratedColumn<DateTime>(
+      'payout_date', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _periodStartMeta =
+      const VerificationMeta('periodStart');
+  @override
+  late final GeneratedColumn<DateTime> periodStart = GeneratedColumn<DateTime>(
+      'period_start', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _periodEndMeta =
+      const VerificationMeta('periodEnd');
+  @override
+  late final GeneratedColumn<DateTime> periodEnd = GeneratedColumn<DateTime>(
+      'period_end', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _expectedAmountMinorMeta =
+      const VerificationMeta('expectedAmountMinor');
+  @override
+  late final GeneratedColumn<int> expectedAmountMinor = GeneratedColumn<int>(
+      'expected_amount_minor', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _actualAmountMinorMeta =
+      const VerificationMeta('actualAmountMinor');
+  @override
+  late final GeneratedColumn<int> actualAmountMinor = GeneratedColumn<int>(
+      'actual_amount_minor', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+      'status', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _paidAtMeta = const VerificationMeta('paidAt');
+  @override
+  late final GeneratedColumn<DateTime> paidAt = GeneratedColumn<DateTime>(
+      'paid_at', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+      'note', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _updatedAtMeta =
+      const VerificationMeta('updatedAt');
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+      'updated_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [
+        id,
+        kimaiProjectId,
+        payoutDate,
+        periodStart,
+        periodEnd,
+        expectedAmountMinor,
+        actualAmountMinor,
+        status,
+        paidAt,
+        note,
+        createdAt,
+        updatedAt
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'payments';
+  @override
+  VerificationContext validateIntegrity(Insertable<Payment> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('kimai_project_id')) {
+      context.handle(
+          _kimaiProjectIdMeta,
+          kimaiProjectId.isAcceptableOrUnknown(
+              data['kimai_project_id']!, _kimaiProjectIdMeta));
+    } else if (isInserting) {
+      context.missing(_kimaiProjectIdMeta);
+    }
+    if (data.containsKey('payout_date')) {
+      context.handle(
+          _payoutDateMeta,
+          payoutDate.isAcceptableOrUnknown(
+              data['payout_date']!, _payoutDateMeta));
+    } else if (isInserting) {
+      context.missing(_payoutDateMeta);
+    }
+    if (data.containsKey('period_start')) {
+      context.handle(
+          _periodStartMeta,
+          periodStart.isAcceptableOrUnknown(
+              data['period_start']!, _periodStartMeta));
+    } else if (isInserting) {
+      context.missing(_periodStartMeta);
+    }
+    if (data.containsKey('period_end')) {
+      context.handle(_periodEndMeta,
+          periodEnd.isAcceptableOrUnknown(data['period_end']!, _periodEndMeta));
+    } else if (isInserting) {
+      context.missing(_periodEndMeta);
+    }
+    if (data.containsKey('expected_amount_minor')) {
+      context.handle(
+          _expectedAmountMinorMeta,
+          expectedAmountMinor.isAcceptableOrUnknown(
+              data['expected_amount_minor']!, _expectedAmountMinorMeta));
+    } else if (isInserting) {
+      context.missing(_expectedAmountMinorMeta);
+    }
+    if (data.containsKey('actual_amount_minor')) {
+      context.handle(
+          _actualAmountMinorMeta,
+          actualAmountMinor.isAcceptableOrUnknown(
+              data['actual_amount_minor']!, _actualAmountMinorMeta));
+    }
+    if (data.containsKey('status')) {
+      context.handle(_statusMeta,
+          status.isAcceptableOrUnknown(data['status']!, _statusMeta));
+    } else if (isInserting) {
+      context.missing(_statusMeta);
+    }
+    if (data.containsKey('paid_at')) {
+      context.handle(_paidAtMeta,
+          paidAt.isAcceptableOrUnknown(data['paid_at']!, _paidAtMeta));
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+          _noteMeta, note.isAcceptableOrUnknown(data['note']!, _noteMeta));
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(_updatedAtMeta,
+          updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta));
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Payment map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Payment(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}id'])!,
+      kimaiProjectId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}kimai_project_id'])!,
+      payoutDate: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}payout_date'])!,
+      periodStart: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}period_start'])!,
+      periodEnd: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}period_end'])!,
+      expectedAmountMinor: attachedDatabase.typeMapping.read(
+          DriftSqlType.int, data['${effectivePrefix}expected_amount_minor'])!,
+      actualAmountMinor: attachedDatabase.typeMapping.read(
+          DriftSqlType.int, data['${effectivePrefix}actual_amount_minor']),
+      status: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}status'])!,
+      paidAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}paid_at']),
+      note: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}note']),
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+      updatedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}updated_at'])!,
+    );
+  }
+
+  @override
+  $PaymentsTable createAlias(String alias) {
+    return $PaymentsTable(attachedDatabase, alias);
+  }
+}
+
+class Payment extends DataClass implements Insertable<Payment> {
+  final String id;
+  final int kimaiProjectId;
+  final DateTime payoutDate;
+  final DateTime periodStart;
+  final DateTime periodEnd;
+  final int expectedAmountMinor;
+  final int? actualAmountMinor;
+  final String status;
+  final DateTime? paidAt;
+  final String? note;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const Payment(
+      {required this.id,
+      required this.kimaiProjectId,
+      required this.payoutDate,
+      required this.periodStart,
+      required this.periodEnd,
+      required this.expectedAmountMinor,
+      this.actualAmountMinor,
+      required this.status,
+      this.paidAt,
+      this.note,
+      required this.createdAt,
+      required this.updatedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['kimai_project_id'] = Variable<int>(kimaiProjectId);
+    map['payout_date'] = Variable<DateTime>(payoutDate);
+    map['period_start'] = Variable<DateTime>(periodStart);
+    map['period_end'] = Variable<DateTime>(periodEnd);
+    map['expected_amount_minor'] = Variable<int>(expectedAmountMinor);
+    if (!nullToAbsent || actualAmountMinor != null) {
+      map['actual_amount_minor'] = Variable<int>(actualAmountMinor);
+    }
+    map['status'] = Variable<String>(status);
+    if (!nullToAbsent || paidAt != null) {
+      map['paid_at'] = Variable<DateTime>(paidAt);
+    }
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  PaymentsCompanion toCompanion(bool nullToAbsent) {
+    return PaymentsCompanion(
+      id: Value(id),
+      kimaiProjectId: Value(kimaiProjectId),
+      payoutDate: Value(payoutDate),
+      periodStart: Value(periodStart),
+      periodEnd: Value(periodEnd),
+      expectedAmountMinor: Value(expectedAmountMinor),
+      actualAmountMinor: actualAmountMinor == null && nullToAbsent
+          ? const Value.absent()
+          : Value(actualAmountMinor),
+      status: Value(status),
+      paidAt:
+          paidAt == null && nullToAbsent ? const Value.absent() : Value(paidAt),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory Payment.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Payment(
+      id: serializer.fromJson<String>(json['id']),
+      kimaiProjectId: serializer.fromJson<int>(json['kimaiProjectId']),
+      payoutDate: serializer.fromJson<DateTime>(json['payoutDate']),
+      periodStart: serializer.fromJson<DateTime>(json['periodStart']),
+      periodEnd: serializer.fromJson<DateTime>(json['periodEnd']),
+      expectedAmountMinor:
+          serializer.fromJson<int>(json['expectedAmountMinor']),
+      actualAmountMinor: serializer.fromJson<int?>(json['actualAmountMinor']),
+      status: serializer.fromJson<String>(json['status']),
+      paidAt: serializer.fromJson<DateTime?>(json['paidAt']),
+      note: serializer.fromJson<String?>(json['note']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'kimaiProjectId': serializer.toJson<int>(kimaiProjectId),
+      'payoutDate': serializer.toJson<DateTime>(payoutDate),
+      'periodStart': serializer.toJson<DateTime>(periodStart),
+      'periodEnd': serializer.toJson<DateTime>(periodEnd),
+      'expectedAmountMinor': serializer.toJson<int>(expectedAmountMinor),
+      'actualAmountMinor': serializer.toJson<int?>(actualAmountMinor),
+      'status': serializer.toJson<String>(status),
+      'paidAt': serializer.toJson<DateTime?>(paidAt),
+      'note': serializer.toJson<String?>(note),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  Payment copyWith(
+          {String? id,
+          int? kimaiProjectId,
+          DateTime? payoutDate,
+          DateTime? periodStart,
+          DateTime? periodEnd,
+          int? expectedAmountMinor,
+          Value<int?> actualAmountMinor = const Value.absent(),
+          String? status,
+          Value<DateTime?> paidAt = const Value.absent(),
+          Value<String?> note = const Value.absent(),
+          DateTime? createdAt,
+          DateTime? updatedAt}) =>
+      Payment(
+        id: id ?? this.id,
+        kimaiProjectId: kimaiProjectId ?? this.kimaiProjectId,
+        payoutDate: payoutDate ?? this.payoutDate,
+        periodStart: periodStart ?? this.periodStart,
+        periodEnd: periodEnd ?? this.periodEnd,
+        expectedAmountMinor: expectedAmountMinor ?? this.expectedAmountMinor,
+        actualAmountMinor: actualAmountMinor.present
+            ? actualAmountMinor.value
+            : this.actualAmountMinor,
+        status: status ?? this.status,
+        paidAt: paidAt.present ? paidAt.value : this.paidAt,
+        note: note.present ? note.value : this.note,
+        createdAt: createdAt ?? this.createdAt,
+        updatedAt: updatedAt ?? this.updatedAt,
+      );
+  Payment copyWithCompanion(PaymentsCompanion data) {
+    return Payment(
+      id: data.id.present ? data.id.value : this.id,
+      kimaiProjectId: data.kimaiProjectId.present
+          ? data.kimaiProjectId.value
+          : this.kimaiProjectId,
+      payoutDate:
+          data.payoutDate.present ? data.payoutDate.value : this.payoutDate,
+      periodStart:
+          data.periodStart.present ? data.periodStart.value : this.periodStart,
+      periodEnd: data.periodEnd.present ? data.periodEnd.value : this.periodEnd,
+      expectedAmountMinor: data.expectedAmountMinor.present
+          ? data.expectedAmountMinor.value
+          : this.expectedAmountMinor,
+      actualAmountMinor: data.actualAmountMinor.present
+          ? data.actualAmountMinor.value
+          : this.actualAmountMinor,
+      status: data.status.present ? data.status.value : this.status,
+      paidAt: data.paidAt.present ? data.paidAt.value : this.paidAt,
+      note: data.note.present ? data.note.value : this.note,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Payment(')
+          ..write('id: $id, ')
+          ..write('kimaiProjectId: $kimaiProjectId, ')
+          ..write('payoutDate: $payoutDate, ')
+          ..write('periodStart: $periodStart, ')
+          ..write('periodEnd: $periodEnd, ')
+          ..write('expectedAmountMinor: $expectedAmountMinor, ')
+          ..write('actualAmountMinor: $actualAmountMinor, ')
+          ..write('status: $status, ')
+          ..write('paidAt: $paidAt, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+      id,
+      kimaiProjectId,
+      payoutDate,
+      periodStart,
+      periodEnd,
+      expectedAmountMinor,
+      actualAmountMinor,
+      status,
+      paidAt,
+      note,
+      createdAt,
+      updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Payment &&
+          other.id == this.id &&
+          other.kimaiProjectId == this.kimaiProjectId &&
+          other.payoutDate == this.payoutDate &&
+          other.periodStart == this.periodStart &&
+          other.periodEnd == this.periodEnd &&
+          other.expectedAmountMinor == this.expectedAmountMinor &&
+          other.actualAmountMinor == this.actualAmountMinor &&
+          other.status == this.status &&
+          other.paidAt == this.paidAt &&
+          other.note == this.note &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class PaymentsCompanion extends UpdateCompanion<Payment> {
+  final Value<String> id;
+  final Value<int> kimaiProjectId;
+  final Value<DateTime> payoutDate;
+  final Value<DateTime> periodStart;
+  final Value<DateTime> periodEnd;
+  final Value<int> expectedAmountMinor;
+  final Value<int?> actualAmountMinor;
+  final Value<String> status;
+  final Value<DateTime?> paidAt;
+  final Value<String?> note;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const PaymentsCompanion({
+    this.id = const Value.absent(),
+    this.kimaiProjectId = const Value.absent(),
+    this.payoutDate = const Value.absent(),
+    this.periodStart = const Value.absent(),
+    this.periodEnd = const Value.absent(),
+    this.expectedAmountMinor = const Value.absent(),
+    this.actualAmountMinor = const Value.absent(),
+    this.status = const Value.absent(),
+    this.paidAt = const Value.absent(),
+    this.note = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  PaymentsCompanion.insert({
+    required String id,
+    required int kimaiProjectId,
+    required DateTime payoutDate,
+    required DateTime periodStart,
+    required DateTime periodEnd,
+    required int expectedAmountMinor,
+    this.actualAmountMinor = const Value.absent(),
+    required String status,
+    this.paidAt = const Value.absent(),
+    this.note = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  })  : id = Value(id),
+        kimaiProjectId = Value(kimaiProjectId),
+        payoutDate = Value(payoutDate),
+        periodStart = Value(periodStart),
+        periodEnd = Value(periodEnd),
+        expectedAmountMinor = Value(expectedAmountMinor),
+        status = Value(status),
+        createdAt = Value(createdAt),
+        updatedAt = Value(updatedAt);
+  static Insertable<Payment> custom({
+    Expression<String>? id,
+    Expression<int>? kimaiProjectId,
+    Expression<DateTime>? payoutDate,
+    Expression<DateTime>? periodStart,
+    Expression<DateTime>? periodEnd,
+    Expression<int>? expectedAmountMinor,
+    Expression<int>? actualAmountMinor,
+    Expression<String>? status,
+    Expression<DateTime>? paidAt,
+    Expression<String>? note,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (kimaiProjectId != null) 'kimai_project_id': kimaiProjectId,
+      if (payoutDate != null) 'payout_date': payoutDate,
+      if (periodStart != null) 'period_start': periodStart,
+      if (periodEnd != null) 'period_end': periodEnd,
+      if (expectedAmountMinor != null)
+        'expected_amount_minor': expectedAmountMinor,
+      if (actualAmountMinor != null) 'actual_amount_minor': actualAmountMinor,
+      if (status != null) 'status': status,
+      if (paidAt != null) 'paid_at': paidAt,
+      if (note != null) 'note': note,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  PaymentsCompanion copyWith(
+      {Value<String>? id,
+      Value<int>? kimaiProjectId,
+      Value<DateTime>? payoutDate,
+      Value<DateTime>? periodStart,
+      Value<DateTime>? periodEnd,
+      Value<int>? expectedAmountMinor,
+      Value<int?>? actualAmountMinor,
+      Value<String>? status,
+      Value<DateTime?>? paidAt,
+      Value<String?>? note,
+      Value<DateTime>? createdAt,
+      Value<DateTime>? updatedAt,
+      Value<int>? rowid}) {
+    return PaymentsCompanion(
+      id: id ?? this.id,
+      kimaiProjectId: kimaiProjectId ?? this.kimaiProjectId,
+      payoutDate: payoutDate ?? this.payoutDate,
+      periodStart: periodStart ?? this.periodStart,
+      periodEnd: periodEnd ?? this.periodEnd,
+      expectedAmountMinor: expectedAmountMinor ?? this.expectedAmountMinor,
+      actualAmountMinor: actualAmountMinor ?? this.actualAmountMinor,
+      status: status ?? this.status,
+      paidAt: paidAt ?? this.paidAt,
+      note: note ?? this.note,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (kimaiProjectId.present) {
+      map['kimai_project_id'] = Variable<int>(kimaiProjectId.value);
+    }
+    if (payoutDate.present) {
+      map['payout_date'] = Variable<DateTime>(payoutDate.value);
+    }
+    if (periodStart.present) {
+      map['period_start'] = Variable<DateTime>(periodStart.value);
+    }
+    if (periodEnd.present) {
+      map['period_end'] = Variable<DateTime>(periodEnd.value);
+    }
+    if (expectedAmountMinor.present) {
+      map['expected_amount_minor'] = Variable<int>(expectedAmountMinor.value);
+    }
+    if (actualAmountMinor.present) {
+      map['actual_amount_minor'] = Variable<int>(actualAmountMinor.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (paidAt.present) {
+      map['paid_at'] = Variable<DateTime>(paidAt.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PaymentsCompanion(')
+          ..write('id: $id, ')
+          ..write('kimaiProjectId: $kimaiProjectId, ')
+          ..write('payoutDate: $payoutDate, ')
+          ..write('periodStart: $periodStart, ')
+          ..write('periodEnd: $periodEnd, ')
+          ..write('expectedAmountMinor: $expectedAmountMinor, ')
+          ..write('actualAmountMinor: $actualAmountMinor, ')
+          ..write('status: $status, ')
+          ..write('paidAt: $paidAt, ')
+          ..write('note: $note, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $SyncLogsTable extends SyncLogs with TableInfo<$SyncLogsTable, SyncLog> {
   @override
   final GeneratedDatabase attachedDatabase;
@@ -3358,6 +3970,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $AppProjectsTable appProjects = $AppProjectsTable(this);
   late final $PayoutDatesTable payoutDates = $PayoutDatesTable(this);
   late final $TimesheetsTable timesheets = $TimesheetsTable(this);
+  late final $PaymentsTable payments = $PaymentsTable(this);
   late final $SyncLogsTable syncLogs = $SyncLogsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
@@ -3370,6 +3983,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         appProjects,
         payoutDates,
         timesheets,
+        payments,
         syncLogs
       ];
 }
@@ -3789,6 +4403,21 @@ final class $$KimaiProjectsTableReferences
     return ProcessedTableManager(
         manager.$state.copyWith(prefetchedData: cache));
   }
+
+  static MultiTypedResultKey<$PaymentsTable, List<Payment>> _paymentsRefsTable(
+          _$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(db.payments,
+          aliasName: $_aliasNameGenerator(
+              db.kimaiProjects.id, db.payments.kimaiProjectId));
+
+  $$PaymentsTableProcessedTableManager get paymentsRefs {
+    final manager = $$PaymentsTableTableManager($_db, $_db.payments)
+        .filter((f) => f.kimaiProjectId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_paymentsRefsTable($_db));
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: cache));
+  }
 }
 
 class $$KimaiProjectsTableFilterComposer
@@ -3859,6 +4488,27 @@ class $$KimaiProjectsTableFilterComposer
             $$TimesheetsTableFilterComposer(
               $db: $db,
               $table: $db.timesheets,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
+
+  Expression<bool> paymentsRefs(
+      Expression<bool> Function($$PaymentsTableFilterComposer f) f) {
+    final $$PaymentsTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.payments,
+        getReferencedColumn: (t) => t.kimaiProjectId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$PaymentsTableFilterComposer(
+              $db: $db,
+              $table: $db.payments,
               $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
               joinBuilder: joinBuilder,
               $removeJoinBuilderFromRootComposer:
@@ -3978,6 +4628,27 @@ class $$KimaiProjectsTableAnnotationComposer
             ));
     return f(composer);
   }
+
+  Expression<T> paymentsRefs<T extends Object>(
+      Expression<T> Function($$PaymentsTableAnnotationComposer a) f) {
+    final $$PaymentsTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.payments,
+        getReferencedColumn: (t) => t.kimaiProjectId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$PaymentsTableAnnotationComposer(
+              $db: $db,
+              $table: $db.payments,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
 }
 
 class $$KimaiProjectsTableTableManager extends RootTableManager<
@@ -3991,7 +4662,8 @@ class $$KimaiProjectsTableTableManager extends RootTableManager<
     $$KimaiProjectsTableUpdateCompanionBuilder,
     (KimaiProject, $$KimaiProjectsTableReferences),
     KimaiProject,
-    PrefetchHooks Function({bool appProjectsRefs, bool timesheetsRefs})> {
+    PrefetchHooks Function(
+        {bool appProjectsRefs, bool timesheetsRefs, bool paymentsRefs})> {
   $$KimaiProjectsTableTableManager(_$AppDatabase db, $KimaiProjectsTable table)
       : super(TableManagerState(
           db: db,
@@ -4049,12 +4721,15 @@ class $$KimaiProjectsTableTableManager extends RootTableManager<
                   ))
               .toList(),
           prefetchHooksCallback: (
-              {appProjectsRefs = false, timesheetsRefs = false}) {
+              {appProjectsRefs = false,
+              timesheetsRefs = false,
+              paymentsRefs = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [
                 if (appProjectsRefs) db.appProjects,
-                if (timesheetsRefs) db.timesheets
+                if (timesheetsRefs) db.timesheets,
+                if (paymentsRefs) db.payments
               ],
               addJoins: null,
               getPrefetchedDataCallback: (items) async {
@@ -4084,6 +4759,19 @@ class $$KimaiProjectsTableTableManager extends RootTableManager<
                         referencedItemsForCurrentItem:
                             (item, referencedItems) => referencedItems
                                 .where((e) => e.kimaiProjectId == item.id),
+                        typedResults: items),
+                  if (paymentsRefs)
+                    await $_getPrefetchedData<KimaiProject, $KimaiProjectsTable,
+                            Payment>(
+                        currentTable: table,
+                        referencedTable: $$KimaiProjectsTableReferences
+                            ._paymentsRefsTable(db),
+                        managerFromTypedResult: (p0) =>
+                            $$KimaiProjectsTableReferences(db, table, p0)
+                                .paymentsRefs,
+                        referencedItemsForCurrentItem:
+                            (item, referencedItems) => referencedItems
+                                .where((e) => e.kimaiProjectId == item.id),
                         typedResults: items)
                 ];
               },
@@ -4103,7 +4791,8 @@ typedef $$KimaiProjectsTableProcessedTableManager = ProcessedTableManager<
     $$KimaiProjectsTableUpdateCompanionBuilder,
     (KimaiProject, $$KimaiProjectsTableReferences),
     KimaiProject,
-    PrefetchHooks Function({bool appProjectsRefs, bool timesheetsRefs})>;
+    PrefetchHooks Function(
+        {bool appProjectsRefs, bool timesheetsRefs, bool paymentsRefs})>;
 typedef $$AppProjectsTableCreateCompanionBuilder = AppProjectsCompanion
     Function({
   required String id,
@@ -5475,6 +6164,386 @@ typedef $$TimesheetsTableProcessedTableManager = ProcessedTableManager<
     (Timesheet, $$TimesheetsTableReferences),
     Timesheet,
     PrefetchHooks Function({bool kimaiProjectId, bool appProjectId})>;
+typedef $$PaymentsTableCreateCompanionBuilder = PaymentsCompanion Function({
+  required String id,
+  required int kimaiProjectId,
+  required DateTime payoutDate,
+  required DateTime periodStart,
+  required DateTime periodEnd,
+  required int expectedAmountMinor,
+  Value<int?> actualAmountMinor,
+  required String status,
+  Value<DateTime?> paidAt,
+  Value<String?> note,
+  required DateTime createdAt,
+  required DateTime updatedAt,
+  Value<int> rowid,
+});
+typedef $$PaymentsTableUpdateCompanionBuilder = PaymentsCompanion Function({
+  Value<String> id,
+  Value<int> kimaiProjectId,
+  Value<DateTime> payoutDate,
+  Value<DateTime> periodStart,
+  Value<DateTime> periodEnd,
+  Value<int> expectedAmountMinor,
+  Value<int?> actualAmountMinor,
+  Value<String> status,
+  Value<DateTime?> paidAt,
+  Value<String?> note,
+  Value<DateTime> createdAt,
+  Value<DateTime> updatedAt,
+  Value<int> rowid,
+});
+
+final class $$PaymentsTableReferences
+    extends BaseReferences<_$AppDatabase, $PaymentsTable, Payment> {
+  $$PaymentsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $KimaiProjectsTable _kimaiProjectIdTable(_$AppDatabase db) =>
+      db.kimaiProjects.createAlias($_aliasNameGenerator(
+          db.payments.kimaiProjectId, db.kimaiProjects.id));
+
+  $$KimaiProjectsTableProcessedTableManager get kimaiProjectId {
+    final $_column = $_itemColumn<int>('kimai_project_id')!;
+
+    final manager = $$KimaiProjectsTableTableManager($_db, $_db.kimaiProjects)
+        .filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_kimaiProjectIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: [item]));
+  }
+}
+
+class $$PaymentsTableFilterComposer
+    extends Composer<_$AppDatabase, $PaymentsTable> {
+  $$PaymentsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get payoutDate => $composableBuilder(
+      column: $table.payoutDate, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get periodStart => $composableBuilder(
+      column: $table.periodStart, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get periodEnd => $composableBuilder(
+      column: $table.periodEnd, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get expectedAmountMinor => $composableBuilder(
+      column: $table.expectedAmountMinor,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get actualAmountMinor => $composableBuilder(
+      column: $table.actualAmountMinor,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get status => $composableBuilder(
+      column: $table.status, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get paidAt => $composableBuilder(
+      column: $table.paidAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get note => $composableBuilder(
+      column: $table.note, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnFilters(column));
+
+  $$KimaiProjectsTableFilterComposer get kimaiProjectId {
+    final $$KimaiProjectsTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.kimaiProjectId,
+        referencedTable: $db.kimaiProjects,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$KimaiProjectsTableFilterComposer(
+              $db: $db,
+              $table: $db.kimaiProjects,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+}
+
+class $$PaymentsTableOrderingComposer
+    extends Composer<_$AppDatabase, $PaymentsTable> {
+  $$PaymentsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get payoutDate => $composableBuilder(
+      column: $table.payoutDate, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get periodStart => $composableBuilder(
+      column: $table.periodStart, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get periodEnd => $composableBuilder(
+      column: $table.periodEnd, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get expectedAmountMinor => $composableBuilder(
+      column: $table.expectedAmountMinor,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get actualAmountMinor => $composableBuilder(
+      column: $table.actualAmountMinor,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get status => $composableBuilder(
+      column: $table.status, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get paidAt => $composableBuilder(
+      column: $table.paidAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get note => $composableBuilder(
+      column: $table.note, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnOrderings(column));
+
+  $$KimaiProjectsTableOrderingComposer get kimaiProjectId {
+    final $$KimaiProjectsTableOrderingComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.kimaiProjectId,
+        referencedTable: $db.kimaiProjects,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$KimaiProjectsTableOrderingComposer(
+              $db: $db,
+              $table: $db.kimaiProjects,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+}
+
+class $$PaymentsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PaymentsTable> {
+  $$PaymentsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get payoutDate => $composableBuilder(
+      column: $table.payoutDate, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get periodStart => $composableBuilder(
+      column: $table.periodStart, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get periodEnd =>
+      $composableBuilder(column: $table.periodEnd, builder: (column) => column);
+
+  GeneratedColumn<int> get expectedAmountMinor => $composableBuilder(
+      column: $table.expectedAmountMinor, builder: (column) => column);
+
+  GeneratedColumn<int> get actualAmountMinor => $composableBuilder(
+      column: $table.actualAmountMinor, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get paidAt =>
+      $composableBuilder(column: $table.paidAt, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$KimaiProjectsTableAnnotationComposer get kimaiProjectId {
+    final $$KimaiProjectsTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.kimaiProjectId,
+        referencedTable: $db.kimaiProjects,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$KimaiProjectsTableAnnotationComposer(
+              $db: $db,
+              $table: $db.kimaiProjects,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+}
+
+class $$PaymentsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $PaymentsTable,
+    Payment,
+    $$PaymentsTableFilterComposer,
+    $$PaymentsTableOrderingComposer,
+    $$PaymentsTableAnnotationComposer,
+    $$PaymentsTableCreateCompanionBuilder,
+    $$PaymentsTableUpdateCompanionBuilder,
+    (Payment, $$PaymentsTableReferences),
+    Payment,
+    PrefetchHooks Function({bool kimaiProjectId})> {
+  $$PaymentsTableTableManager(_$AppDatabase db, $PaymentsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PaymentsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PaymentsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PaymentsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> id = const Value.absent(),
+            Value<int> kimaiProjectId = const Value.absent(),
+            Value<DateTime> payoutDate = const Value.absent(),
+            Value<DateTime> periodStart = const Value.absent(),
+            Value<DateTime> periodEnd = const Value.absent(),
+            Value<int> expectedAmountMinor = const Value.absent(),
+            Value<int?> actualAmountMinor = const Value.absent(),
+            Value<String> status = const Value.absent(),
+            Value<DateTime?> paidAt = const Value.absent(),
+            Value<String?> note = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<DateTime> updatedAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              PaymentsCompanion(
+            id: id,
+            kimaiProjectId: kimaiProjectId,
+            payoutDate: payoutDate,
+            periodStart: periodStart,
+            periodEnd: periodEnd,
+            expectedAmountMinor: expectedAmountMinor,
+            actualAmountMinor: actualAmountMinor,
+            status: status,
+            paidAt: paidAt,
+            note: note,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String id,
+            required int kimaiProjectId,
+            required DateTime payoutDate,
+            required DateTime periodStart,
+            required DateTime periodEnd,
+            required int expectedAmountMinor,
+            Value<int?> actualAmountMinor = const Value.absent(),
+            required String status,
+            Value<DateTime?> paidAt = const Value.absent(),
+            Value<String?> note = const Value.absent(),
+            required DateTime createdAt,
+            required DateTime updatedAt,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              PaymentsCompanion.insert(
+            id: id,
+            kimaiProjectId: kimaiProjectId,
+            payoutDate: payoutDate,
+            periodStart: periodStart,
+            periodEnd: periodEnd,
+            expectedAmountMinor: expectedAmountMinor,
+            actualAmountMinor: actualAmountMinor,
+            status: status,
+            paidAt: paidAt,
+            note: note,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) =>
+                  (e.readTable(table), $$PaymentsTableReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: ({kimaiProjectId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins: <
+                  T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic>>(state) {
+                if (kimaiProjectId) {
+                  state = state.withJoin(
+                    currentTable: table,
+                    currentColumn: table.kimaiProjectId,
+                    referencedTable:
+                        $$PaymentsTableReferences._kimaiProjectIdTable(db),
+                    referencedColumn:
+                        $$PaymentsTableReferences._kimaiProjectIdTable(db).id,
+                  ) as T;
+                }
+
+                return state;
+              },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ));
+}
+
+typedef $$PaymentsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $PaymentsTable,
+    Payment,
+    $$PaymentsTableFilterComposer,
+    $$PaymentsTableOrderingComposer,
+    $$PaymentsTableAnnotationComposer,
+    $$PaymentsTableCreateCompanionBuilder,
+    $$PaymentsTableUpdateCompanionBuilder,
+    (Payment, $$PaymentsTableReferences),
+    Payment,
+    PrefetchHooks Function({bool kimaiProjectId})>;
 typedef $$SyncLogsTableCreateCompanionBuilder = SyncLogsCompanion Function({
   required String id,
   required String operation,
@@ -5701,6 +6770,8 @@ class $AppDatabaseManager {
       $$PayoutDatesTableTableManager(_db, _db.payoutDates);
   $$TimesheetsTableTableManager get timesheets =>
       $$TimesheetsTableTableManager(_db, _db.timesheets);
+  $$PaymentsTableTableManager get payments =>
+      $$PaymentsTableTableManager(_db, _db.payments);
   $$SyncLogsTableTableManager get syncLogs =>
       $$SyncLogsTableTableManager(_db, _db.syncLogs);
 }
