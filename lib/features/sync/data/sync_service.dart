@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/app_database.dart';
+import '../../../core/network/kimai_api_client.dart';
 import '../../../core/network/network_providers.dart';
 import '../../projects/data/projects_repository.dart';
 import '../../timesheets/data/timesheets_repository.dart';
@@ -151,7 +152,14 @@ class SyncService {
           );
           importedEntries += timesheets.length;
         } catch (error) {
-          failures.add('${project.name}: $error');
+          failures.add(
+            _formatProjectFailure(
+              error,
+              projectName: project.name,
+              projectId: kimaiProjectId,
+              mode: mode,
+            ),
+          );
         } finally {
           completedProjects += 1;
         }
@@ -171,6 +179,8 @@ class SyncService {
                   ? 'Synced $importedEntries entries from ${enabledProjects.length} projects'
                   : 'Synced $importedEntries entries; failed ${failures.length} projects',
             ),
+            error:
+                Value(failures.isEmpty ? null : failures.join('\n\n---\n\n')),
             finishedAt: Value(finishedAt),
           ),
         );
@@ -189,19 +199,21 @@ class SyncService {
         enabledProjects: enabledProjects.length,
         failedProjects: failures,
       );
-    } catch (error) {
+    } catch (error, stackTrace) {
       final finishedAt = DateTime.now().toUtc();
+      final details = _formatSyncError(error, mode: mode);
       await (database.update(database.syncLogs)
             ..where((table) => table.id.equals(logId)))
           .write(
         SyncLogsCompanion(
           status: const Value('failed'),
           message: Value(error.toString()),
+          error: Value(details),
           finishedAt: Value(finishedAt),
         ),
       );
 
-      rethrow;
+      Error.throwWithStackTrace(SyncFailureException(details), stackTrace);
     }
   }
 
@@ -223,17 +235,85 @@ class SyncService {
   }
 
   bool _isTransient(Object error) {
-    if (error is! DioException) {
+    final dioError = switch (error) {
+      KimaiApiException(:final source) => source,
+      DioException() => error,
+      _ => null,
+    };
+
+    if (dioError == null) {
       return false;
     }
 
-    return error.type == DioExceptionType.connectionTimeout ||
-        error.type == DioExceptionType.receiveTimeout ||
-        error.type == DioExceptionType.sendTimeout ||
-        error.type == DioExceptionType.connectionError ||
-        (error.response?.statusCode != null &&
-            error.response!.statusCode! >= 500);
+    return dioError.type == DioExceptionType.connectionTimeout ||
+        dioError.type == DioExceptionType.receiveTimeout ||
+        dioError.type == DioExceptionType.sendTimeout ||
+        dioError.type == DioExceptionType.connectionError ||
+        (dioError.response?.statusCode != null &&
+            dioError.response!.statusCode! >= 500);
+  }
+
+  String _formatProjectFailure(
+    Object error, {
+    required String projectName,
+    required int projectId,
+    required TimesheetSyncMode mode,
+  }) {
+    return [
+      'project_name=$projectName',
+      _formatSyncError(error, mode: mode, projectId: projectId),
+    ].join('\n');
+  }
+
+  String _formatSyncError(
+    Object error, {
+    required TimesheetSyncMode mode,
+    int? projectId,
+  }) {
+    if (error is KimaiApiException) {
+      return error.details.toDiagnosticString(
+        projectId: projectId,
+        syncType: mode.name,
+      );
+    }
+
+    if (error is DioException) {
+      final request = error.requestOptions;
+      final uri = request.uri;
+      final baseUrl = request.baseUrl.isNotEmpty
+          ? request.baseUrl
+          : uri.replace(path: '', query: '', fragment: '').toString();
+
+      return KimaiRequestErrorDetails(
+        timestamp: DateTime.now().toUtc(),
+        baseUrl: baseUrl,
+        method: request.method,
+        path: uri.path,
+        queryParameters: {
+          for (final entry in request.queryParameters.entries)
+            if (entry.value != null) entry.key: entry.value as Object,
+        },
+        statusCode: error.response?.statusCode,
+        responseBody: stringifyKimaiResponseData(error.response?.data),
+      ).toDiagnosticString(projectId: projectId, syncType: mode.name);
+    }
+
+    return [
+      'timestamp=${DateTime.now().toUtc().toIso8601String()}',
+      'sync_type=${mode.name}',
+      if (projectId != null) 'project_id=$projectId',
+      'error=$error',
+    ].join('\n');
   }
 }
 
 final syncServiceProvider = Provider<SyncService>(SyncService.new);
+
+class SyncFailureException implements Exception {
+  const SyncFailureException(this.details);
+
+  final String details;
+
+  @override
+  String toString() => details;
+}

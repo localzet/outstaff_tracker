@@ -1,6 +1,10 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../storage/secure_token_storage.dart';
+import 'kimai_url.dart';
 
 class KimaiApiClient {
   KimaiApiClient({
@@ -17,7 +21,7 @@ class KimaiApiClient {
 
   Future<bool> checkConnection() async {
     final response = await _request<Map<String, Object?>>(
-      path: '/api/version',
+      path: 'version',
       method: 'GET',
     );
 
@@ -28,7 +32,7 @@ class KimaiApiClient {
 
   Future<List<KimaiProjectDto>> fetchProjects() async {
     final response = await _request<List<dynamic>>(
-      path: '/api/projects',
+      path: 'projects',
       method: 'GET',
       queryParameters: const {'visible': 3},
     );
@@ -45,41 +49,37 @@ class KimaiApiClient {
     DateTime end, {
     int? projectId,
   }) async {
-    const pageSize = 200;
-    var page = 1;
     final result = <KimaiTimesheetDto>[];
+    final firstResponse = await _request<Object?>(
+      path: 'timesheets',
+      method: 'GET',
+      queryParameters: buildTimesheetQueryParams(
+        begin: begin,
+        end: end,
+        projectId: projectId,
+      ),
+    );
 
-    while (true) {
-      final response = await _request<Object?>(
-        path: '/api/timesheets',
+    result.addAll(_mapTimesheetResponse(firstResponse.data));
+
+    final totalPages = _readPaginationHeader(firstResponse, 'x-total-pages');
+    if (totalPages == null || totalPages <= 1) {
+      return result;
+    }
+
+    for (var page = 2; page <= totalPages; page++) {
+      final pageResponse = await _request<Object?>(
+        path: 'timesheets',
         method: 'GET',
-        queryParameters: {
-          // TODO: Confirm date filter names against the target Kimai version.
-          'begin': begin.toUtc().toIso8601String(),
-          'end': end.toUtc().toIso8601String(),
-          // TODO: Confirm pagination and project filter names for the target Kimai version.
-          'page': page,
-          'size': pageSize,
-          if (projectId != null) 'project': projectId,
-        },
+        queryParameters: buildTimesheetQueryParams(
+          begin: begin,
+          end: end,
+          projectId: projectId,
+          page: page,
+        ),
       );
 
-      final pageItems = _readResponseList(response.data)
-          .whereType<Map<String, Object?>>()
-          .map(KimaiTimesheetDto.fromJson)
-          .toList(growable: false);
-      result.addAll(pageItems);
-
-      final totalHeader = response.headers.value('x-total-count');
-      final total = totalHeader == null ? null : int.tryParse(totalHeader);
-      final hasHeaderNext = total != null && result.length < total;
-      final hasImplicitNext = total == null && pageItems.length == pageSize;
-
-      if (!hasHeaderNext && !hasImplicitNext) {
-        break;
-      }
-
-      page += 1;
+      result.addAll(_mapTimesheetResponse(pageResponse.data));
     }
 
     return result;
@@ -95,21 +95,186 @@ class KimaiApiClient {
       throw KimaiAuthenticationException('Kimai API token is not configured.');
     }
 
-    final baseUri = Uri.parse(_baseUrl);
-    final endpoint = baseUri.resolve(path);
+    final normalizedBaseUrl = normalizeKimaiBaseUrl(_baseUrl);
+    final endpoint = _buildEndpoint(normalizedBaseUrl, path);
+    final sanitizedQuery = _sanitizeQuery(queryParameters);
 
-    return _dio.request<T>(
-      endpoint.toString(),
-      options: Options(
+    if (kDebugMode) {
+      debugPrint(
+        'Kimai request $method $endpoint query=$sanitizedQuery',
+      );
+    }
+
+    try {
+      final response = await _dio.request<T>(
+        endpoint.toString(),
+        options: Options(
+          method: method,
+          headers: {
+            Headers.acceptHeader: Headers.jsonContentType,
+            'Authorization': 'Bearer $token',
+          },
+        ),
+        queryParameters: sanitizedQuery,
+      );
+
+      return response;
+    } on DioException catch (error) {
+      final detail = KimaiRequestErrorDetails.fromDioException(
+        error,
+        baseUrl: normalizedBaseUrl,
         method: method,
-        headers: {
-          Headers.acceptHeader: Headers.jsonContentType,
-          'Authorization': 'Bearer $token',
-        },
-      ),
+        path: _formatDiagnosticPath(path),
+        queryParameters: sanitizedQuery,
+      );
+
+      if (kDebugMode) {
+        debugPrint(
+          'Kimai error status=${detail.statusCode} body=${detail.responseBody}',
+        );
+      }
+
+      throw KimaiApiException(detail, error);
+    }
+  }
+}
+
+Map<String, Object> buildTimesheetQueryParams({
+  required DateTime begin,
+  required DateTime end,
+  int? projectId,
+  int? page,
+}) {
+  return {
+    // TODO: Confirm date filter names against the target Kimai version.
+    'begin': formatKimaiDateTime(begin),
+    'end': formatKimaiDateTime(end),
+    // TODO: Confirm project filter name for the target Kimai version.
+    if (projectId != null) 'project': projectId,
+    if (page != null) 'page': page,
+  };
+}
+
+String formatKimaiDateTime(DateTime value) {
+  final local = value.toLocal();
+  String two(int value) => value.toString().padLeft(2, '0');
+
+  return '${local.year.toString().padLeft(4, '0')}-'
+      '${two(local.month)}-'
+      '${two(local.day)}T'
+      '${two(local.hour)}:'
+      '${two(local.minute)}:'
+      '${two(local.second)}';
+}
+
+Uri _buildEndpoint(String baseUrl, String path) {
+  final base = Uri.parse(baseUrl.endsWith('/') ? baseUrl : '$baseUrl/');
+  final relativePath = path.replaceFirst(RegExp(r'^/+'), '');
+
+  return base.resolve(relativePath);
+}
+
+Map<String, Object> _sanitizeQuery(Map<String, Object?>? queryParameters) {
+  return {
+    for (final entry in (queryParameters ?? const <String, Object?>{}).entries)
+      if (entry.value != null) entry.key: entry.value!,
+  };
+}
+
+class KimaiApiException implements Exception {
+  const KimaiApiException(this.details, this.source);
+
+  final KimaiRequestErrorDetails details;
+  final DioException source;
+
+  @override
+  String toString() => details.toDiagnosticString();
+}
+
+class KimaiRequestErrorDetails {
+  const KimaiRequestErrorDetails({
+    required this.timestamp,
+    required this.baseUrl,
+    required this.method,
+    required this.path,
+    required this.queryParameters,
+    required this.statusCode,
+    required this.responseBody,
+  });
+
+  factory KimaiRequestErrorDetails.fromDioException(
+    DioException error, {
+    required String baseUrl,
+    required String method,
+    required String path,
+    required Map<String, Object> queryParameters,
+  }) {
+    return KimaiRequestErrorDetails(
+      timestamp: DateTime.now().toUtc(),
+      baseUrl: baseUrl,
+      method: method,
+      path: path,
       queryParameters: queryParameters,
+      statusCode: error.response?.statusCode,
+      responseBody: stringifyKimaiResponseData(error.response?.data),
     );
   }
+
+  final DateTime timestamp;
+  final String baseUrl;
+  final String method;
+  final String path;
+  final Map<String, Object> queryParameters;
+  final int? statusCode;
+  final String responseBody;
+
+  String toDiagnosticString({
+    int? projectId,
+    String? syncType,
+  }) {
+    return [
+      'timestamp=${timestamp.toIso8601String()}',
+      if (syncType != null) 'sync_type=$syncType',
+      if (projectId != null) 'project_id=$projectId',
+      'base_url=$baseUrl',
+      'method=$method',
+      'path=$path',
+      'query_parameters=$queryParameters',
+      'status_code=${statusCode ?? 'unknown'}',
+      'response_body=$responseBody',
+    ].join('\n');
+  }
+}
+
+String stringifyKimaiResponseData(Object? data) {
+  if (data == null) {
+    return '';
+  }
+
+  try {
+    return jsonEncode(data);
+  } catch (_) {
+    return data.toString();
+  }
+}
+
+String _formatDiagnosticPath(String path) {
+  final normalized = path.replaceFirst(RegExp(r'^/+'), '');
+
+  return '/$normalized';
+}
+
+int? _readPaginationHeader(Response<Object?> response, String name) {
+  final value = response.headers.value(name);
+
+  return value == null ? null : int.tryParse(value);
+}
+
+List<KimaiTimesheetDto> _mapTimesheetResponse(Object? data) {
+  return _readResponseList(data)
+      .whereType<Map<String, Object?>>()
+      .map(KimaiTimesheetDto.fromJson)
+      .toList(growable: false);
 }
 
 List<Object?> _readResponseList(Object? data) {

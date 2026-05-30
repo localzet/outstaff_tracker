@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/app_database.dart';
+import '../../../core/network/kimai_api_client.dart';
 import '../../../core/network/network_providers.dart';
 import '../../projects/data/projects_repository.dart';
 import '../../timesheets/data/timesheets_repository.dart';
@@ -72,12 +73,16 @@ class SyncRepository {
       return KimaiConnectResult(importedProjects: projects.length);
     } catch (error) {
       final finishedAt = DateTime.now().toUtc();
+      final details = error is KimaiApiException
+          ? error.details.toDiagnosticString(syncType: 'connect')
+          : error.toString();
       await (database.update(database.syncLogs)
             ..where((table) => table.id.equals(logId)))
           .write(
         SyncLogsCompanion(
           status: const Value('failed'),
           message: Value(error.toString()),
+          error: Value(details),
           finishedAt: Value(finishedAt),
         ),
       );

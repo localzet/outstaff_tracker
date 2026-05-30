@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/db/app_database.dart';
+import '../../../core/network/kimai_api_client.dart';
 import '../../../core/network/kimai_url.dart';
 import '../../../core/network/network_providers.dart';
 import '../../../core/theme/app_theme.dart';
@@ -295,6 +296,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       return 'Connected, but Kimai returned no projects.';
     }
 
+    if (error is KimaiApiException) {
+      return _connectionErrorMessage(error.source);
+    }
+
     if (error is DioException) {
       final statusCode = error.response?.statusCode;
       if (statusCode == 401 || statusCode == 403) {
@@ -365,9 +370,24 @@ class SyncProgressBlock extends StatelessWidget {
           ],
           if (syncState.lastError != null) ...[
             const SizedBox(height: 8),
-            Text(
+            SelectableText(
               syncState.lastError!,
               style: const TextStyle(color: AppColors.warning),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () async {
+                await Clipboard.setData(
+                  ClipboardData(text: syncState.lastError!),
+                );
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Last error copied')),
+                  );
+                }
+              },
+              icon: const Icon(Icons.copy_rounded, size: 18),
+              label: const Text('Copy last error'),
             ),
           ],
         ],

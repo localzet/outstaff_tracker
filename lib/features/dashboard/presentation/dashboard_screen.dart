@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -33,6 +34,38 @@ class DashboardScreen extends ConsumerWidget {
         ),
       ],
       children: [
+        if (syncState.lastError != null)
+          AppPanel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Last sync error',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                SelectableText(
+                  syncState.lastError!,
+                  style: const TextStyle(color: AppColors.warning),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    await Clipboard.setData(
+                      ClipboardData(text: syncState.lastError!),
+                    );
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Last error copied')),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.copy_rounded, size: 18),
+                  label: const Text('Copy last error'),
+                ),
+              ],
+            ),
+          ),
         summary.when(
           data: (data) => LayoutBuilder(
             builder: (context, constraints) {

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/app_database.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_screen.dart';
 import '../../settings/data/settings_repository.dart';
 
@@ -47,26 +48,67 @@ class DiagnosticsScreen extends ConsumerWidget {
                   )
                 else
                   for (final log in data.logs)
-                    Text(
-                      '${log.startedAt.toLocal()} · ${log.operation} · ${log.status} · ${log.message ?? ''}',
-                      style: Theme.of(context).textTheme.bodyMedium,
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${log.startedAt.toLocal()} - ${log.operation} - ${log.status} - ${log.message ?? ''}',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          if (log.error != null && log.error!.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            SelectableText(
+                              log.error!,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(color: AppColors.warning),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
                 const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    await Clipboard.setData(
-                      ClipboardData(text: data.report),
-                    );
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Diagnostic report copied'),
-                        ),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.copy_rounded, size: 18),
-                  label: const Text('Copy diagnostic report'),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (data.lastError != null)
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          await Clipboard.setData(
+                            ClipboardData(text: data.lastError!),
+                          );
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Last error copied'),
+                              ),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.copy_rounded, size: 18),
+                        label: const Text('Copy last error'),
+                      ),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        await Clipboard.setData(
+                          ClipboardData(text: data.report),
+                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Diagnostic report copied'),
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.copy_rounded, size: 18),
+                      label: const Text('Copy diagnostic report'),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -95,6 +137,17 @@ class _DiagnosticsData {
   final int enabledProjects;
   final List<SyncLog> logs;
 
+  String? get lastError {
+    for (final log in logs) {
+      final error = log.error;
+      if (error != null && error.isNotEmpty) {
+        return error;
+      }
+    }
+
+    return null;
+  }
+
   String get report {
     return [
       'Outstaff Tracker diagnostics',
@@ -102,8 +155,14 @@ class _DiagnosticsData {
       'db_schema_version=$schemaVersion',
       'kimai_base_url=$baseUrl',
       'enabled_projects=$enabledProjects',
-      for (final log in logs)
+      for (final log in logs) ...[
         'sync_log=${log.startedAt.toIso8601String()} ${log.operation} ${log.status} ${log.message ?? ''}',
+        if (log.error != null && log.error!.isNotEmpty) ...[
+          'sync_error_start',
+          log.error!,
+          'sync_error_end',
+        ],
+      ],
     ].join('\n');
   }
 }
