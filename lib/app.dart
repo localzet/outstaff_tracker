@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'core/config/app_branding.dart';
 import 'core/theme/app_theme.dart';
 import 'features/analytics/presentation/analytics_screen.dart';
 import 'features/calendar/presentation/calendar_screen.dart';
@@ -96,7 +97,7 @@ class OutstaffTrackerApp extends ConsumerWidget {
     final router = ref.watch(appRouterProvider);
 
     return MaterialApp.router(
-      title: 'Outstaff Tracker',
+      title: AppBranding.appName,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
       locale: const Locale('ru', 'RU'),
@@ -271,7 +272,7 @@ class AppSidebar extends StatelessWidget {
               const Padding(
                 padding: EdgeInsets.fromLTRB(12, 8, 12, 24),
                 child: Text(
-                  'Outstaff Tracker',
+                  AppBranding.appName,
                   style: TextStyle(
                     color: AppColors.textPrimary,
                     fontSize: 18,

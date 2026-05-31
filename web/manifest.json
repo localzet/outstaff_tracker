@@ -1,11 +1,11 @@
 {
-    "name": "outstaff_tracker",
-    "short_name": "outstaff_tracker",
+    "name": "Outstaff Tracker",
+    "short_name": "Outstaff",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#09090B",
+    "theme_color": "#09090B",
+    "description": "Local-first time analytics for freelancers working through Kimai.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

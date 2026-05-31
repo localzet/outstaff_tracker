@@ -1,6 +1,6 @@
 #define AppName "Outstaff Tracker"
 #ifndef AppPublisher
-#define AppPublisher "Zorin Projects S.P."
+#define AppPublisher "Localzet Group"
 #endif
 #define AppExeName "outstaff_tracker.exe"
 #ifndef AppVersion
