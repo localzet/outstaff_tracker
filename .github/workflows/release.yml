@@ -101,15 +101,43 @@ jobs:
         run: |
           $installer = (Resolve-Path "release\outstaff_tracker-setup-$env:VERSION.exe").Path
           $installDir = Join-Path $env:RUNNER_TEMP "Outstaff Tracker"
-          & $installer /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER "/DIR=$installDir"
-          $exe = Join-Path $installDir "outstaff_tracker.exe"
-          if (!(Test-Path $exe)) {
-            throw "Installed executable was not found: $exe"
+          $installLog = Join-Path $env:RUNNER_TEMP "outstaff-tracker-install.log"
+          $installArgs = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER /DIR=""$installDir"" /LOG=""$installLog"""
+          $install = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
+          if ($install.ExitCode -ne 0) {
+            if (Test-Path $installLog) {
+              Get-Content $installLog | Select-Object -Last 120
+            }
+            throw "Installer failed with exit code $($install.ExitCode)"
           }
-          $entry = Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" |
-            Where-Object { $_.DisplayName -eq "Outstaff Tracker" } |
-            Select-Object -First 1
-          if ($null -eq $entry) {
+          $entry = @(
+            Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue
+            Get-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue
+          ) | Where-Object { $_.DisplayName -eq "Outstaff Tracker" } | Select-Object -First 1
+          $exeCandidates = @(
+            (Join-Path $installDir "outstaff_tracker.exe")
+            $(if ($entry -and $entry.InstallLocation) { Join-Path $entry.InstallLocation "outstaff_tracker.exe" })
+            (Join-Path $env:LOCALAPPDATA "Programs\Outstaff Tracker\outstaff_tracker.exe")
+            (Join-Path $env:ProgramFiles "Outstaff Tracker\outstaff_tracker.exe")
+          ) | Where-Object { $_ }
+          $exe = $exeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (!$exe) {
+            $searchRoots = @(
+              $installDir
+              (Join-Path $env:LOCALAPPDATA "Programs")
+              (Join-Path $env:ProgramFiles "Outstaff Tracker")
+            )
+            $exe = Get-ChildItem -Path $searchRoots -Filter outstaff_tracker.exe -Recurse -ErrorAction SilentlyContinue |
+              Select-Object -ExpandProperty FullName -First 1
+          }
+          if (!$exe -or !(Test-Path $exe)) {
+            if (Test-Path $installLog) {
+              Get-Content $installLog | Select-Object -Last 160
+            }
+            Get-ChildItem -Path $env:RUNNER_TEMP -Recurse -ErrorAction SilentlyContinue | Select-Object FullName, Length
+            throw "Installed executable was not found"
+          }
+          if (!$entry) {
             throw "Uninstall entry was not found"
           }
           $process = Start-Process -FilePath $exe -WindowStyle Hidden -PassThru
@@ -118,8 +146,17 @@ jobs:
             throw "Installed app exited during startup smoke test with code $($process.ExitCode)"
           }
           Stop-Process -Id $process.Id -Force
-          $uninstaller = Join-Path $installDir "unins000.exe"
-          & $uninstaller /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+          $uninstaller = Join-Path (Split-Path $exe -Parent) "unins000.exe"
+          if (!(Test-Path $uninstaller) -and $entry.UninstallString) {
+            $uninstaller = ($entry.UninstallString -replace '^"', '') -replace '".*$', ''
+          }
+          if (!(Test-Path $uninstaller)) {
+            throw "Uninstaller was not found"
+          }
+          $uninstall = Start-Process -FilePath $uninstaller -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) {
+            throw "Uninstaller failed with exit code $($uninstall.ExitCode)"
+          }
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
