@@ -57,6 +57,27 @@ The release executable is created under:
 build/windows/x64/runner/Release/outstaff_tracker.exe
 ```
 
+## Windows Code Signing
+
+The GitHub release workflow can sign the Windows installer when a code signing
+certificate is available. Signing is optional: without these secrets the workflow
+still builds unsigned artifacts.
+
+Required GitHub Actions secrets:
+
+- `WINDOWS_SIGNING_CERTIFICATE_BASE64` — base64-encoded `.pfx` certificate
+- `WINDOWS_SIGNING_CERTIFICATE_PASSWORD` — password for the `.pfx`
+
+Create the base64 value on Windows:
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("certificate.pfx")) | Set-Content certificate.pfx.base64
+```
+
+Unsigned installers may show Microsoft Defender SmartScreen warnings such as
+`Unknown publisher`. A valid Authenticode signature is required for Windows to
+display the verified publisher.
+
 ## Branding Assets
 
 Branding source and generated platform icons are checked into the repository:

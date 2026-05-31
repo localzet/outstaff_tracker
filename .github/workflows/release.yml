@@ -96,6 +96,27 @@ jobs:
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           & $iscc "installer\windows\outstaff_tracker.iss" "/DAppVersion=$env:VERSION" "/DAppPublisher=Localzet Group" "/DSourceDir=$source" "/DOutputDir=$output"
 
+      - name: Sign Windows installer
+        if: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 != '' && secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD != '' }}
+        shell: pwsh
+        env:
+          WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+          WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          $certificatePath = Join-Path $env:RUNNER_TEMP "outstaff_tracker_signing_certificate.pfx"
+          [System.IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:WINDOWS_SIGNING_CERTIFICATE_BASE64))
+          $installer = (Resolve-Path "release\outstaff_tracker-setup-$env:VERSION.exe").Path
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -like "*\x64\signtool.exe" } |
+            Sort-Object FullName -Descending |
+            Select-Object -ExpandProperty FullName -First 1
+          if (!$signtool) {
+            throw "signtool.exe was not found"
+          }
+          & $signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $certificatePath /p $env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD $installer
+          & $signtool verify /pa /v $installer
+          Remove-Item $certificatePath -Force
+
       - name: Smoke test Windows installer
         shell: pwsh
         run: |
