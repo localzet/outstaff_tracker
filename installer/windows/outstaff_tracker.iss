@@ -34,6 +34,7 @@ SetupIconFile=..\..\windows\runner\resources\app_icon.ico
 WizardImageFile=assets\wizard_large.bmp
 WizardSmallImageFile=assets\wizard_small.bmp
 LicenseFile=assets\license.txt
+UninstallDisplayName={#AppName}
 UninstallDisplayIcon={app}\{#AppExeName}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
