@@ -97,12 +97,15 @@ jobs:
           & $iscc "installer\windows\outstaff_tracker.iss" "/DAppVersion=$env:VERSION" "/DAppPublisher=Localzet Group" "/DSourceDir=$source" "/DOutputDir=$output"
 
       - name: Sign Windows installer
-        if: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 != '' && secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD != '' }}
         shell: pwsh
         env:
           WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
           WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
         run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_BASE64) -or [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD)) {
+            Write-Host "Windows signing secrets are not configured. Skipping Authenticode signing."
+            exit 0
+          }
           $certificatePath = Join-Path $env:RUNNER_TEMP "outstaff_tracker_signing_certificate.pfx"
           [System.IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:WINDOWS_SIGNING_CERTIFICATE_BASE64))
           $installer = (Resolve-Path "release\outstaff_tracker-setup-$env:VERSION.exe").Path
