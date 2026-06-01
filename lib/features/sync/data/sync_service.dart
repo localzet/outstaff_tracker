@@ -131,6 +131,11 @@ class SyncService {
       final failures = <String>[];
       final projectReports = <String>[];
       var completedProjects = 0;
+      final preservedLocalQueueEntries = await _countPreservedLocalQueue(
+        database,
+        begin: firstBegin,
+        end: finalEnd,
+      );
 
       for (final project in enabledProjects) {
         final kimaiProjectId = project.kimaiProjectId;
@@ -226,6 +231,7 @@ class SyncService {
         remoteEntriesFetched: remoteEntriesFetched,
         localUpserts: importedEntries,
         reconciledRemovals: reconciledRemovals,
+        preservedLocalQueueEntries: preservedLocalQueueEntries,
         failedProjects: failures.length,
         projectReports: projectReports,
       );
@@ -236,7 +242,7 @@ class SyncService {
           SyncLogsCompanion(
             status: Value(status),
             message: Value(
-              'Projects: ${enabledProjects.length}; fetched: $remoteEntriesFetched; upserts: $importedEntries; reconciled removals: $reconciledRemovals; failed: ${failures.length}',
+              'Projects: ${enabledProjects.length}; fetched: $remoteEntriesFetched; upserts: $importedEntries; reconciled removals: $reconciledRemovals; preserved local queue: $preservedLocalQueueEntries; failed: ${failures.length}',
             ),
             error:
                 Value(failures.isEmpty ? null : failures.join('\n\n---\n\n')),
@@ -318,6 +324,24 @@ class SyncService {
     }
   }
 
+  Future<int> _countPreservedLocalQueue(
+    AppDatabase database, {
+    required DateTime begin,
+    required DateTime end,
+  }) async {
+    final row = await database.customSelect(
+      "SELECT COUNT(*) AS c FROM local_time_entries "
+      "WHERE begin_at >= ? AND begin_at <= ? "
+      "AND (kimai_timesheet_id IS NULL OR status IN ('sync_pending', "
+      "'sync_failed', 'stop_failed', 'edit_failed', 'running_local', "
+      "'conflict'))",
+      variables: [Variable(begin), Variable(end)],
+      readsFrom: {database.localTimeEntries},
+    ).getSingle();
+
+    return row.read<int>('c');
+  }
+
   static List<KimaiSyncRange> _splitByMonth(KimaiSyncRange range) {
     final chunks = <KimaiSyncRange>[];
     var cursor = range.begin;
@@ -388,6 +412,7 @@ class SyncService {
     required int remoteEntriesFetched,
     required int localUpserts,
     required int reconciledRemovals,
+    required int preservedLocalQueueEntries,
     required int failedProjects,
     required List<String> projectReports,
   }) {
@@ -399,6 +424,7 @@ class SyncService {
       'total_remote_entries_fetched=$remoteEntriesFetched',
       'total_local_upserts=$localUpserts',
       'total_reconciled_removals=$reconciledRemovals',
+      'preserved_local_queue_entries=$preservedLocalQueueEntries',
       'failed_projects=$failedProjects',
       for (final report in projectReports) ...[
         'project_sync_start',

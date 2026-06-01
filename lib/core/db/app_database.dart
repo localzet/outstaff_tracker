@@ -119,6 +119,7 @@ class Timesheets extends Table {
       .customConstraint('NULL REFERENCES kimai_projects(id)')();
   TextColumn get appProjectId =>
       text().nullable().customConstraint('NULL REFERENCES app_projects(id)')();
+  IntColumn get activityId => integer().nullable()();
   TextColumn get activityName => text().nullable()();
   TextColumn get description => text().nullable()();
   DateTimeColumn get beginAt => dateTime()();
@@ -224,7 +225,7 @@ class AppDatabase extends _$AppDatabase {
         );
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -263,6 +264,9 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 11) {
             await m.createTable(kimaiTags);
+          }
+          if (from < 12) {
+            await m.addColumn(timesheets, timesheets.activityId);
           }
         },
       );

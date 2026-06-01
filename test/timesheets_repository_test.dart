@@ -1,10 +1,14 @@
+import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:outstaff_tracker/core/db/app_database.dart';
 import 'package:outstaff_tracker/core/network/kimai_api_client.dart';
+import 'package:outstaff_tracker/core/network/network_providers.dart';
 import 'package:outstaff_tracker/features/local_tracking/data/local_tracking_repository.dart';
 import 'package:outstaff_tracker/features/projects/data/projects_repository.dart';
+import 'package:outstaff_tracker/features/timesheets/data/timesheet_edit_service.dart';
 import 'package:outstaff_tracker/features/timesheets/data/timesheets_repository.dart';
 
 void main() {
@@ -32,11 +36,20 @@ void main() {
             updatedAt: DateTime.utc(2026),
           ),
         );
+    await database.into(database.kimaiActivities).insert(
+          KimaiActivitiesCompanion.insert(
+            id: const Value(7),
+            projectId: const Value(1),
+            name: 'Development',
+            syncedAt: DateTime.utc(2026),
+          ),
+        );
     await database.into(database.timesheets).insert(
           TimesheetsCompanion.insert(
             id: const Value(101),
             kimaiProjectId: const Value(1),
             appProjectId: const Value('kimai_1'),
+            activityId: const Value(7),
             activityName: const Value('Development'),
             description: const Value('Feature work'),
             beginAt: DateTime.utc(2026, 5, 1, 9),
@@ -293,4 +306,157 @@ void main() {
     expect(rate.effectiveFrom.toUtc(), DateTime.utc(2026, 4, 1, 9));
     expect(imported.amountMinor, 75000);
   });
+
+  test('edit recent synced timesheet updates Kimai and local row', () async {
+    final fakeClient = _FakeKimaiClient(
+      updatedTimesheet: KimaiTimesheetDto(
+        id: 101,
+        projectId: 1,
+        activityId: 7,
+        activityName: 'Development',
+        description: 'Updated work',
+        tags: 'bug, urgent',
+        beginAt: DateTime.utc(2026, 5, 1, 9, 30),
+        endAt: DateTime.utc(2026, 5, 1, 10, 30),
+        durationSeconds: 3600,
+      ),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(database),
+        kimaiApiClientProvider.overrideWith((ref) async => fakeClient),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(timesheetEditServiceProvider).save(
+          TimesheetEditInput(
+            entryId: '101',
+            kimaiTimesheetId: 101,
+            appProjectId: 'kimai_1',
+            kimaiProjectId: 1,
+            activityId: 7,
+            activityName: 'Development',
+            description: 'Updated work',
+            tags: 'bug, urgent',
+            beginAt: DateTime.utc(2026, 5, 1, 9, 30),
+            endAt: DateTime.utc(2026, 5, 1, 10, 30),
+          ),
+        );
+
+    final row = await (database.select(database.timesheets)
+          ..where((table) => table.id.equals(101)))
+        .getSingle();
+
+    expect(fakeClient.updateCalls, 1);
+    expect(fakeClient.lastTags, 'bug, urgent');
+    expect(row.description, 'Updated work');
+    expect(row.tags, 'bug, urgent');
+    expect(row.beginAt.toUtc(), DateTime.utc(2026, 5, 1, 9, 30));
+  });
+
+  test('edit rejected by Kimai does not corrupt local row', () async {
+    final fakeClient = _FakeKimaiClient(
+      updatedTimesheet: KimaiTimesheetDto(
+        id: 101,
+        projectId: 1,
+        beginAt: DateTime.utc(2026, 5, 1, 9),
+        durationSeconds: 3600,
+      ),
+      updateError: _kimaiValidationError(),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(database),
+        kimaiApiClientProvider.overrideWith((ref) async => fakeClient),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await expectLater(
+      () => container.read(timesheetEditServiceProvider).save(
+            TimesheetEditInput(
+              entryId: '101',
+              kimaiTimesheetId: 101,
+              appProjectId: 'kimai_1',
+              kimaiProjectId: 1,
+              activityId: 7,
+              activityName: 'Development',
+              description: 'Rejected work',
+              tags: 'rejected',
+              beginAt: DateTime.utc(2026, 5, 1, 11),
+              endAt: DateTime.utc(2026, 5, 1, 12),
+            ),
+          ),
+      throwsA(isA<TimesheetEditException>()),
+    );
+
+    final row = await (database.select(database.timesheets)
+          ..where((table) => table.id.equals(101)))
+        .getSingle();
+
+    expect(fakeClient.updateCalls, 1);
+    expect(row.description, 'Feature work');
+    expect(row.tags, null);
+    expect(row.beginAt.toUtc(), DateTime.utc(2026, 5, 1, 9));
+  });
+}
+
+class _FakeKimaiClient implements KimaiApiClient {
+  _FakeKimaiClient({
+    required this.updatedTimesheet,
+    this.updateError,
+  });
+
+  final KimaiTimesheetDto updatedTimesheet;
+  final Object? updateError;
+  int updateCalls = 0;
+  String? lastTags;
+
+  @override
+  Future<KimaiTimesheetDto> updateTimesheet({
+    required int kimaiTimesheetId,
+    required int projectId,
+    required DateTime beginAt,
+    required DateTime endAt,
+    required String description,
+    int? activityId,
+    String? tags,
+  }) async {
+    updateCalls++;
+    lastTags = tags;
+    final error = updateError;
+    if (error != null) {
+      throw error;
+    }
+
+    return updatedTimesheet;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+KimaiApiException _kimaiValidationError() {
+  final requestOptions = RequestOptions(path: '/api/timesheets/101');
+  final response = Response<Object?>(
+    requestOptions: requestOptions,
+    statusCode: 403,
+    data: {'message': 'Timesheet is locked'},
+  );
+  final source = DioException(
+    requestOptions: requestOptions,
+    response: response,
+  );
+
+  return KimaiApiException(
+    KimaiRequestErrorDetails.fromDioException(
+      source,
+      baseUrl: 'https://kimai.example.test/api',
+      method: 'PATCH',
+      path: '/timesheets/101',
+      queryParameters: const {},
+    ),
+    source,
+  );
 }

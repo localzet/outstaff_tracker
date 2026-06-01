@@ -3199,6 +3199,12 @@ class $TimesheetsTable extends Timesheets
       type: DriftSqlType.string,
       requiredDuringInsert: false,
       $customConstraints: 'NULL REFERENCES app_projects(id)');
+  static const VerificationMeta _activityIdMeta =
+      const VerificationMeta('activityId');
+  @override
+  late final GeneratedColumn<int> activityId = GeneratedColumn<int>(
+      'activity_id', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
   static const VerificationMeta _activityNameMeta =
       const VerificationMeta('activityName');
   @override
@@ -3279,6 +3285,7 @@ class $TimesheetsTable extends Timesheets
         id,
         kimaiProjectId,
         appProjectId,
+        activityId,
         activityName,
         description,
         beginAt,
@@ -3316,6 +3323,12 @@ class $TimesheetsTable extends Timesheets
           _appProjectIdMeta,
           appProjectId.isAcceptableOrUnknown(
               data['app_project_id']!, _appProjectIdMeta));
+    }
+    if (data.containsKey('activity_id')) {
+      context.handle(
+          _activityIdMeta,
+          activityId.isAcceptableOrUnknown(
+              data['activity_id']!, _activityIdMeta));
     }
     if (data.containsKey('activity_name')) {
       context.handle(
@@ -3394,6 +3407,8 @@ class $TimesheetsTable extends Timesheets
           .read(DriftSqlType.int, data['${effectivePrefix}kimai_project_id']),
       appProjectId: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}app_project_id']),
+      activityId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}activity_id']),
       activityName: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}activity_name']),
       description: attachedDatabase.typeMapping
@@ -3431,6 +3446,7 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
   final int id;
   final int? kimaiProjectId;
   final String? appProjectId;
+  final int? activityId;
   final String? activityName;
   final String? description;
   final DateTime beginAt;
@@ -3447,6 +3463,7 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
       {required this.id,
       this.kimaiProjectId,
       this.appProjectId,
+      this.activityId,
       this.activityName,
       this.description,
       required this.beginAt,
@@ -3468,6 +3485,9 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
     }
     if (!nullToAbsent || appProjectId != null) {
       map['app_project_id'] = Variable<String>(appProjectId);
+    }
+    if (!nullToAbsent || activityId != null) {
+      map['activity_id'] = Variable<int>(activityId);
     }
     if (!nullToAbsent || activityName != null) {
       map['activity_name'] = Variable<String>(activityName);
@@ -3509,6 +3529,9 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
       appProjectId: appProjectId == null && nullToAbsent
           ? const Value.absent()
           : Value(appProjectId),
+      activityId: activityId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(activityId),
       activityName: activityName == null && nullToAbsent
           ? const Value.absent()
           : Value(activityName),
@@ -3542,6 +3565,7 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
       id: serializer.fromJson<int>(json['id']),
       kimaiProjectId: serializer.fromJson<int?>(json['kimaiProjectId']),
       appProjectId: serializer.fromJson<String?>(json['appProjectId']),
+      activityId: serializer.fromJson<int?>(json['activityId']),
       activityName: serializer.fromJson<String?>(json['activityName']),
       description: serializer.fromJson<String?>(json['description']),
       beginAt: serializer.fromJson<DateTime>(json['beginAt']),
@@ -3563,6 +3587,7 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
       'id': serializer.toJson<int>(id),
       'kimaiProjectId': serializer.toJson<int?>(kimaiProjectId),
       'appProjectId': serializer.toJson<String?>(appProjectId),
+      'activityId': serializer.toJson<int?>(activityId),
       'activityName': serializer.toJson<String?>(activityName),
       'description': serializer.toJson<String?>(description),
       'beginAt': serializer.toJson<DateTime>(beginAt),
@@ -3582,6 +3607,7 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
           {int? id,
           Value<int?> kimaiProjectId = const Value.absent(),
           Value<String?> appProjectId = const Value.absent(),
+          Value<int?> activityId = const Value.absent(),
           Value<String?> activityName = const Value.absent(),
           Value<String?> description = const Value.absent(),
           DateTime? beginAt,
@@ -3600,6 +3626,7 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
             kimaiProjectId.present ? kimaiProjectId.value : this.kimaiProjectId,
         appProjectId:
             appProjectId.present ? appProjectId.value : this.appProjectId,
+        activityId: activityId.present ? activityId.value : this.activityId,
         activityName:
             activityName.present ? activityName.value : this.activityName,
         description: description.present ? description.value : this.description,
@@ -3624,6 +3651,8 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
       appProjectId: data.appProjectId.present
           ? data.appProjectId.value
           : this.appProjectId,
+      activityId:
+          data.activityId.present ? data.activityId.value : this.activityId,
       activityName: data.activityName.present
           ? data.activityName.value
           : this.activityName,
@@ -3653,6 +3682,7 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
           ..write('id: $id, ')
           ..write('kimaiProjectId: $kimaiProjectId, ')
           ..write('appProjectId: $appProjectId, ')
+          ..write('activityId: $activityId, ')
           ..write('activityName: $activityName, ')
           ..write('description: $description, ')
           ..write('beginAt: $beginAt, ')
@@ -3674,6 +3704,7 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
       id,
       kimaiProjectId,
       appProjectId,
+      activityId,
       activityName,
       description,
       beginAt,
@@ -3693,6 +3724,7 @@ class Timesheet extends DataClass implements Insertable<Timesheet> {
           other.id == this.id &&
           other.kimaiProjectId == this.kimaiProjectId &&
           other.appProjectId == this.appProjectId &&
+          other.activityId == this.activityId &&
           other.activityName == this.activityName &&
           other.description == this.description &&
           other.beginAt == this.beginAt &&
@@ -3711,6 +3743,7 @@ class TimesheetsCompanion extends UpdateCompanion<Timesheet> {
   final Value<int> id;
   final Value<int?> kimaiProjectId;
   final Value<String?> appProjectId;
+  final Value<int?> activityId;
   final Value<String?> activityName;
   final Value<String?> description;
   final Value<DateTime> beginAt;
@@ -3727,6 +3760,7 @@ class TimesheetsCompanion extends UpdateCompanion<Timesheet> {
     this.id = const Value.absent(),
     this.kimaiProjectId = const Value.absent(),
     this.appProjectId = const Value.absent(),
+    this.activityId = const Value.absent(),
     this.activityName = const Value.absent(),
     this.description = const Value.absent(),
     this.beginAt = const Value.absent(),
@@ -3744,6 +3778,7 @@ class TimesheetsCompanion extends UpdateCompanion<Timesheet> {
     this.id = const Value.absent(),
     this.kimaiProjectId = const Value.absent(),
     this.appProjectId = const Value.absent(),
+    this.activityId = const Value.absent(),
     this.activityName = const Value.absent(),
     this.description = const Value.absent(),
     required DateTime beginAt,
@@ -3762,6 +3797,7 @@ class TimesheetsCompanion extends UpdateCompanion<Timesheet> {
     Expression<int>? id,
     Expression<int>? kimaiProjectId,
     Expression<String>? appProjectId,
+    Expression<int>? activityId,
     Expression<String>? activityName,
     Expression<String>? description,
     Expression<DateTime>? beginAt,
@@ -3779,6 +3815,7 @@ class TimesheetsCompanion extends UpdateCompanion<Timesheet> {
       if (id != null) 'id': id,
       if (kimaiProjectId != null) 'kimai_project_id': kimaiProjectId,
       if (appProjectId != null) 'app_project_id': appProjectId,
+      if (activityId != null) 'activity_id': activityId,
       if (activityName != null) 'activity_name': activityName,
       if (description != null) 'description': description,
       if (beginAt != null) 'begin_at': beginAt,
@@ -3798,6 +3835,7 @@ class TimesheetsCompanion extends UpdateCompanion<Timesheet> {
       {Value<int>? id,
       Value<int?>? kimaiProjectId,
       Value<String?>? appProjectId,
+      Value<int?>? activityId,
       Value<String?>? activityName,
       Value<String?>? description,
       Value<DateTime>? beginAt,
@@ -3814,6 +3852,7 @@ class TimesheetsCompanion extends UpdateCompanion<Timesheet> {
       id: id ?? this.id,
       kimaiProjectId: kimaiProjectId ?? this.kimaiProjectId,
       appProjectId: appProjectId ?? this.appProjectId,
+      activityId: activityId ?? this.activityId,
       activityName: activityName ?? this.activityName,
       description: description ?? this.description,
       beginAt: beginAt ?? this.beginAt,
@@ -3840,6 +3879,9 @@ class TimesheetsCompanion extends UpdateCompanion<Timesheet> {
     }
     if (appProjectId.present) {
       map['app_project_id'] = Variable<String>(appProjectId.value);
+    }
+    if (activityId.present) {
+      map['activity_id'] = Variable<int>(activityId.value);
     }
     if (activityName.present) {
       map['activity_name'] = Variable<String>(activityName.value);
@@ -3886,6 +3928,7 @@ class TimesheetsCompanion extends UpdateCompanion<Timesheet> {
           ..write('id: $id, ')
           ..write('kimaiProjectId: $kimaiProjectId, ')
           ..write('appProjectId: $appProjectId, ')
+          ..write('activityId: $activityId, ')
           ..write('activityName: $activityName, ')
           ..write('description: $description, ')
           ..write('beginAt: $beginAt, ')
@@ -8310,6 +8353,7 @@ typedef $$TimesheetsTableCreateCompanionBuilder = TimesheetsCompanion Function({
   Value<int> id,
   Value<int?> kimaiProjectId,
   Value<String?> appProjectId,
+  Value<int?> activityId,
   Value<String?> activityName,
   Value<String?> description,
   required DateTime beginAt,
@@ -8327,6 +8371,7 @@ typedef $$TimesheetsTableUpdateCompanionBuilder = TimesheetsCompanion Function({
   Value<int> id,
   Value<int?> kimaiProjectId,
   Value<String?> appProjectId,
+  Value<int?> activityId,
   Value<String?> activityName,
   Value<String?> description,
   Value<DateTime> beginAt,
@@ -8387,6 +8432,9 @@ class $$TimesheetsTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get activityId => $composableBuilder(
+      column: $table.activityId, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<String> get activityName => $composableBuilder(
       column: $table.activityName, builder: (column) => ColumnFilters(column));
@@ -8479,6 +8527,9 @@ class $$TimesheetsTableOrderingComposer
   ColumnOrderings<int> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<int> get activityId => $composableBuilder(
+      column: $table.activityId, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<String> get activityName => $composableBuilder(
       column: $table.activityName,
       builder: (column) => ColumnOrderings(column));
@@ -8570,6 +8621,9 @@ class $$TimesheetsTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get activityId => $composableBuilder(
+      column: $table.activityId, builder: (column) => column);
 
   GeneratedColumn<String> get activityName => $composableBuilder(
       column: $table.activityName, builder: (column) => column);
@@ -8674,6 +8728,7 @@ class $$TimesheetsTableTableManager extends RootTableManager<
             Value<int> id = const Value.absent(),
             Value<int?> kimaiProjectId = const Value.absent(),
             Value<String?> appProjectId = const Value.absent(),
+            Value<int?> activityId = const Value.absent(),
             Value<String?> activityName = const Value.absent(),
             Value<String?> description = const Value.absent(),
             Value<DateTime> beginAt = const Value.absent(),
@@ -8691,6 +8746,7 @@ class $$TimesheetsTableTableManager extends RootTableManager<
             id: id,
             kimaiProjectId: kimaiProjectId,
             appProjectId: appProjectId,
+            activityId: activityId,
             activityName: activityName,
             description: description,
             beginAt: beginAt,
@@ -8708,6 +8764,7 @@ class $$TimesheetsTableTableManager extends RootTableManager<
             Value<int> id = const Value.absent(),
             Value<int?> kimaiProjectId = const Value.absent(),
             Value<String?> appProjectId = const Value.absent(),
+            Value<int?> activityId = const Value.absent(),
             Value<String?> activityName = const Value.absent(),
             Value<String?> description = const Value.absent(),
             required DateTime beginAt,
@@ -8725,6 +8782,7 @@ class $$TimesheetsTableTableManager extends RootTableManager<
             id: id,
             kimaiProjectId: kimaiProjectId,
             appProjectId: appProjectId,
+            activityId: activityId,
             activityName: activityName,
             description: description,
             beginAt: beginAt,

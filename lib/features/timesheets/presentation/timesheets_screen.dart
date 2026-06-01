@@ -10,6 +10,7 @@ import '../../../core/utils/tags.dart';
 import '../../../core/widgets/app_screen.dart';
 import '../../../core/widgets/responsive_data_table.dart';
 import '../../local_tracking/data/local_tracking_repository.dart';
+import '../data/timesheet_edit_service.dart';
 import '../data/timesheets_repository.dart';
 
 class TimesheetsScreen extends ConsumerStatefulWidget {
@@ -205,6 +206,7 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
             sortField: _sortField,
             sortAscending: _sortAscending,
             onSort: _onSort,
+            onEdit: _editTimesheet,
           ),
           loading: () => const LinearProgressIndicator(),
           error: (error, stackTrace) => EmptyState(
@@ -356,6 +358,40 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
       _sortAscending = ascending;
     });
   }
+
+  Future<void> _editTimesheet(TimesheetEntry entry) async {
+    final repository = ref.read(timesheetsRepositoryProvider);
+    final projects = await repository.getAvailableTimesheetProjects();
+    if (!mounted) {
+      return;
+    }
+
+    final input = await showDialog<TimesheetEditInput>(
+      context: context,
+      builder: (context) => TimesheetEditDialog(
+        entry: entry,
+        projects: projects,
+      ),
+    );
+    if (input == null) {
+      return;
+    }
+
+    try {
+      await ref.read(timesheetEditServiceProvider).save(input);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Запись сохранена')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString())),
+        );
+      }
+    }
+  }
 }
 
 class TimesheetTotalsBar extends StatelessWidget {
@@ -397,6 +433,7 @@ class TimesheetsTable extends StatelessWidget {
     required this.sortField,
     required this.sortAscending,
     required this.onSort,
+    required this.onEdit,
     super.key,
   });
 
@@ -404,6 +441,7 @@ class TimesheetsTable extends StatelessWidget {
   final TimesheetSortField sortField;
   final bool sortAscending;
   final void Function(String key, bool ascending) onSort;
+  final ValueChanged<TimesheetEntry> onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -506,6 +544,17 @@ class TimesheetsTable extends StatelessWidget {
                 : formatMoneyRub(entry.amountMinor!),
           ),
         ),
+        AppTableColumn(
+          key: 'actions',
+          label: '',
+          width: 64,
+          sortable: false,
+          cellBuilder: (context, entry) => IconButton(
+            onPressed: entry.endAt == null ? null : () => onEdit(entry),
+            icon: const Icon(Icons.edit_rounded, size: 18),
+            tooltip: 'Изменить',
+          ),
+        ),
       ],
       emptyTitle: 'Нет записей за выбранный период',
       emptyMessage: 'Синхронизируйте Kimai или измените фильтры.',
@@ -542,8 +591,306 @@ class TimesheetsTable extends StatelessWidget {
                 ? '-'
                 : formatMoneyRub(entry.amountMinor!),
           ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: IconButton(
+              onPressed: entry.endAt == null ? null : () => onEdit(entry),
+              icon: const Icon(Icons.edit_rounded, size: 18),
+              tooltip: 'Изменить',
+            ),
+          ),
         ],
       ),
+    );
+  }
+}
+
+class TimesheetEditDialog extends ConsumerStatefulWidget {
+  const TimesheetEditDialog({
+    required this.entry,
+    required this.projects,
+    super.key,
+  });
+
+  final TimesheetEntry entry;
+  final List<TimesheetProjectOption> projects;
+
+  @override
+  ConsumerState<TimesheetEditDialog> createState() =>
+      _TimesheetEditDialogState();
+}
+
+class _TimesheetEditDialogState extends ConsumerState<TimesheetEditDialog> {
+  late final TextEditingController _descriptionController;
+  late final TextEditingController _tagsController;
+  late DateTime _beginAt;
+  late DateTime _endAt;
+  String? _appProjectId;
+  int? _activityId;
+
+  @override
+  void initState() {
+    super.initState();
+    final entry = widget.entry;
+    _descriptionController = TextEditingController(
+      text: entry.description ?? '',
+    );
+    _tagsController = TextEditingController(text: entry.tags ?? '');
+    _beginAt = entry.beginAt.toLocal();
+    _endAt = (entry.endAt ?? entry.beginAt.add(const Duration(minutes: 1)))
+        .toLocal();
+    _appProjectId = entry.appProjectId;
+    _activityId = entry.activityId;
+  }
+
+  @override
+  void dispose() {
+    _descriptionController.dispose();
+    _tagsController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final project = _selectedProject;
+    final activities = project == null
+        ? const AsyncValue<List<TimerActivityOption>>.data([])
+        : ref.watch(_editActivitiesProvider(project.kimaiProjectId));
+    final tags = ref.watch(_availableTagsProvider);
+
+    return AlertDialog(
+      title: const Text('Изменить запись'),
+      content: SizedBox(
+        width: 560,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: _appProjectId,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Проект'),
+                items: [
+                  for (final item in widget.projects)
+                    DropdownMenuItem(
+                      value: item.appProjectId,
+                      child: Text(item.name, overflow: TextOverflow.ellipsis),
+                    ),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    _appProjectId = value;
+                    _activityId = null;
+                  });
+                },
+              ),
+              const SizedBox(height: 12),
+              activities.when(
+                data: (items) => DropdownButtonFormField<int?>(
+                  initialValue: _activityId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Активность'),
+                  items: [
+                    const DropdownMenuItem<int?>(
+                      value: null,
+                      child: Text('Без активности'),
+                    ),
+                    for (final item in items)
+                      DropdownMenuItem<int?>(
+                        value: item.id,
+                        child: Text(item.name, overflow: TextOverflow.ellipsis),
+                      ),
+                  ],
+                  onChanged: (value) => setState(() => _activityId = value),
+                ),
+                loading: () => const LinearProgressIndicator(),
+                error: (error, stackTrace) => Text(error.toString()),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _descriptionController,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Описание'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _tagsController,
+                decoration: const InputDecoration(labelText: 'Теги'),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 8),
+              tags.when(
+                data: (items) => Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final tag in items.take(12))
+                      FilterChip(
+                        label: Text(tag),
+                        selected: parseTags(_tagsController.text)
+                            .map((value) => value.toLowerCase())
+                            .contains(tag.toLowerCase()),
+                        onSelected: (_) => _toggleTag(tag),
+                      ),
+                  ],
+                ),
+                loading: () => const SizedBox.shrink(),
+                error: (error, stackTrace) => const SizedBox.shrink(),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _EditDateTimeButton(
+                    label: 'Начало',
+                    value: _beginAt,
+                    onChanged: (value) => setState(() => _beginAt = value),
+                  ),
+                  _EditDateTimeButton(
+                    label: 'Окончание',
+                    value: _endAt,
+                    onChanged: (value) => setState(() => _endAt = value),
+                  ),
+                ],
+              ),
+              if (!_endAt.isAfter(_beginAt)) ...[
+                const SizedBox(height: 8),
+                const Text(
+                  'Окончание должно быть позже начала.',
+                  style: TextStyle(color: AppColors.danger),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Отмена'),
+        ),
+        FilledButton(
+          onPressed: _canSave ? _save : null,
+          child: const Text('Сохранить'),
+        ),
+      ],
+    );
+  }
+
+  TimesheetProjectOption? get _selectedProject {
+    final projectId = _appProjectId;
+    if (projectId == null) {
+      return null;
+    }
+
+    for (final project in widget.projects) {
+      if (project.appProjectId == projectId) {
+        return project;
+      }
+    }
+
+    return null;
+  }
+
+  bool get _canSave => _selectedProject != null && _endAt.isAfter(_beginAt);
+
+  void _toggleTag(String tag) {
+    final values = parseTags(_tagsController.text).toList();
+    final index = values.indexWhere(
+      (value) => value.toLowerCase() == tag.toLowerCase(),
+    );
+    if (index >= 0) {
+      values.removeAt(index);
+    } else {
+      values.add(tag);
+    }
+
+    setState(() => _tagsController.text = formatTags(values) ?? '');
+  }
+
+  void _save() {
+    final project = _selectedProject;
+    if (project == null) {
+      return;
+    }
+
+    Navigator.of(context).pop(
+      TimesheetEditInput(
+        entryId: widget.entry.id,
+        kimaiTimesheetId: widget.entry.kimaiTimesheetId,
+        appProjectId: project.appProjectId,
+        kimaiProjectId: project.kimaiProjectId,
+        activityId: _activityId,
+        activityName: _activityName(project.kimaiProjectId),
+        description: _descriptionController.text,
+        tags: _tagsController.text,
+        beginAt: _beginAt,
+        endAt: _endAt,
+      ),
+    );
+  }
+
+  String? _activityName(int kimaiProjectId) {
+    final activities = ref.read(_editActivitiesProvider(kimaiProjectId));
+    final items = activities.valueOrNull ?? const <TimerActivityOption>[];
+    for (final item in items) {
+      if (item.id == _activityId) {
+        return item.name;
+      }
+    }
+
+    return _activityId == widget.entry.activityId
+        ? widget.entry.activityName
+        : null;
+  }
+}
+
+class _EditDateTimeButton extends StatelessWidget {
+  const _EditDateTimeButton({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final DateTime value;
+  final ValueChanged<DateTime> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: () => _pick(context),
+      icon: const Icon(Icons.event_rounded, size: 18),
+      label: Text(
+        '$label: ${DateTimeFormats.date.format(value)} '
+        '${DateTimeFormats.time.format(value)}',
+      ),
+    );
+  }
+
+  Future<void> _pick(BuildContext context) async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: value,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (date == null || !context.mounted) {
+      return;
+    }
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(value),
+    );
+    if (time == null) {
+      return;
+    }
+
+    onChanged(
+      DateTime(date.year, date.month, date.day, time.hour, time.minute),
     );
   }
 }
@@ -729,4 +1076,11 @@ final _availableProjectsProvider =
 
 final _availableTagsProvider = FutureProvider.autoDispose<List<String>>((ref) {
   return ref.watch(timesheetsRepositoryProvider).getAvailableTags();
+});
+
+final _editActivitiesProvider = FutureProvider.autoDispose
+    .family<List<TimerActivityOption>, int>((ref, kimaiProjectId) {
+  return ref
+      .watch(localTrackingRepositoryProvider)
+      .getActivityOptions(kimaiProjectId);
 });

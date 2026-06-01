@@ -135,7 +135,9 @@ class TimesheetEntry {
   const TimesheetEntry({
     required this.id,
     required this.kimaiTimesheetId,
+    required this.kimaiProjectId,
     required this.appProjectId,
+    required this.activityId,
     required this.activityName,
     required this.description,
     required this.beginAt,
@@ -151,7 +153,9 @@ class TimesheetEntry {
 
   final String id;
   final int? kimaiTimesheetId;
+  final int? kimaiProjectId;
   final String? appProjectId;
+  final int? activityId;
   final String? activityName;
   final String? description;
   final DateTime beginAt;
@@ -170,11 +174,39 @@ class TimesheetEntry {
 class TimesheetProjectOption {
   const TimesheetProjectOption({
     required this.appProjectId,
+    required this.kimaiProjectId,
     required this.name,
   });
 
   final String appProjectId;
+  final int kimaiProjectId;
   final String name;
+}
+
+class TimesheetEditInput {
+  const TimesheetEditInput({
+    required this.entryId,
+    required this.appProjectId,
+    required this.kimaiProjectId,
+    required this.beginAt,
+    required this.endAt,
+    this.kimaiTimesheetId,
+    this.activityId,
+    this.activityName,
+    this.description,
+    this.tags,
+  });
+
+  final String entryId;
+  final int? kimaiTimesheetId;
+  final String appProjectId;
+  final int kimaiProjectId;
+  final int? activityId;
+  final String? activityName;
+  final String? description;
+  final String? tags;
+  final DateTime beginAt;
+  final DateTime endAt;
 }
 
 class ProjectFinancialDiagnostics {
@@ -357,9 +389,71 @@ class TimesheetsRepository {
       for (final row in rows)
         TimesheetProjectOption(
           appProjectId: row.readTable(_database.appProjects).id,
+          kimaiProjectId: row.readTable(_database.kimaiProjects).id,
           name: row.readTable(_database.kimaiProjects).name,
         ),
     ];
+  }
+
+  Future<Timesheet?> getRemoteTimesheet(int kimaiTimesheetId) {
+    final query = _database.select(_database.timesheets)
+      ..where((table) => table.id.equals(kimaiTimesheetId));
+
+    return query.getSingleOrNull();
+  }
+
+  Future<void> applyRemoteEdit(KimaiTimesheetDto item) async {
+    final projects = await _database.select(_database.appProjects).get();
+    await upsertRemoteTimesheets([item], projects);
+  }
+
+  Future<void> updateLocalTimesheet(TimesheetEditInput input) async {
+    _validateEditWindow(input.beginAt, input.endAt);
+    final end = _normalizedEndAt(input.beginAt, input.endAt);
+    final now = DateTime.now().toUtc();
+    final project = await (_database.select(_database.appProjects)
+          ..where((table) => table.id.equals(input.appProjectId))
+          ..where((table) => table.kimaiProjectId.equals(input.kimaiProjectId)))
+        .getSingleOrNull();
+    if (project == null) {
+      throw StateError('Выбранный проект не связан с Kimai.');
+    }
+
+    await (_database.update(_database.localTimeEntries)
+          ..where((table) => table.id.equals(input.entryId)))
+        .write(
+      LocalTimeEntriesCompanion(
+        projectId: Value(input.appProjectId),
+        kimaiProjectId: Value(input.kimaiProjectId),
+        activityId: Value(input.activityId),
+        activityName: Value(_blankToNull(input.activityName)),
+        description: Value(_blankToNull(input.description)),
+        tags: Value(formatTags(parseTags(input.tags))),
+        beginAt: Value(input.beginAt.toUtc()),
+        endAt: Value(end),
+        durationSeconds: Value(_durationSeconds(input.beginAt, end)),
+        status: Value(LocalTimeEntryStatus.syncPending.storageValue),
+        lastSyncError: const Value(null),
+        updatedAt: Value(now),
+      ),
+    );
+  }
+
+  Future<void> markLocalEditFailed(String entryId, Object error) {
+    final now = DateTime.now().toUtc();
+
+    return _database.customUpdate(
+      'UPDATE local_time_entries '
+      'SET status = ?, sync_attempts = sync_attempts + 1, '
+      'last_sync_error = ?, updated_at = ? WHERE id = ?',
+      variables: [
+        Variable(LocalTimeEntryStatus.editFailed.storageValue),
+        Variable(error.toString()),
+        Variable(now),
+        Variable(entryId),
+      ],
+      updates: {_database.localTimeEntries},
+    );
   }
 
   Future<List<String>> getAvailableActivities() async {
@@ -584,6 +678,7 @@ class TimesheetsRepository {
               id: Value(item.id),
               kimaiProjectId: Value(item.projectId),
               appProjectId: Value(projectsByKimaiId[item.projectId]?.id),
+              activityId: Value(item.activityId),
               activityName: Value(item.activityName),
               description: Value(item.description),
               beginAt: Value(item.beginAt),
@@ -1026,7 +1121,9 @@ class TimesheetsRepository {
     return TimesheetEntry(
       id: timesheet.id.toString(),
       kimaiTimesheetId: timesheet.id,
+      kimaiProjectId: timesheet.kimaiProjectId,
       appProjectId: timesheet.appProjectId,
+      activityId: timesheet.activityId,
       activityName: timesheet.activityName,
       description: timesheet.description,
       beginAt: timesheet.beginAt,
@@ -1073,7 +1170,9 @@ class TimesheetsRepository {
     return TimesheetEntry(
       id: entry.id,
       kimaiTimesheetId: entry.kimaiTimesheetId,
+      kimaiProjectId: entry.kimaiProjectId,
       appProjectId: entry.projectId,
+      activityId: entry.activityId,
       activityName: entry.activityName,
       description: entry.description,
       beginAt: entry.beginAt,
@@ -1207,4 +1306,30 @@ int _displayDuration(LocalTimeEntry entry) {
   }
 
   return entry.durationSeconds < 60 ? 60 : entry.durationSeconds;
+}
+
+void _validateEditWindow(DateTime beginAt, DateTime endAt) {
+  if (!endAt.isAfter(beginAt)) {
+    throw StateError('Окончание должно быть позже начала.');
+  }
+}
+
+DateTime _normalizedEndAt(DateTime beginAt, DateTime endAt) {
+  final begin = beginAt.toUtc();
+  final end = endAt.toUtc();
+  final minimumEnd = begin.add(const Duration(minutes: 1));
+
+  return end.isBefore(minimumEnd) ? minimumEnd : end;
+}
+
+int _durationSeconds(DateTime beginAt, DateTime endAt) {
+  final seconds = endAt.toUtc().difference(beginAt.toUtc()).inSeconds;
+
+  return seconds < 60 ? 60 : seconds;
+}
+
+String? _blankToNull(String? value) {
+  final trimmed = value?.trim();
+
+  return trimmed == null || trimmed.isEmpty ? null : trimmed;
 }
