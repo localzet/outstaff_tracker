@@ -306,6 +306,33 @@ class AppShell extends StatelessWidget {
     ),
   ];
 
+  static const _mobileDestinations = <NavigationDestinationData>[
+    NavigationDestinationData(
+      label: '\u041e\u0431\u0437\u043e\u0440',
+      path: DashboardScreen.routePath,
+      icon: Icons.grid_view_rounded,
+    ),
+    NavigationDestinationData(
+      label: '\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c',
+      path: CalendarScreen.routePath,
+      icon: Icons.calendar_month_rounded,
+    ),
+    NavigationDestinationData(
+      label: '\u0412\u0440\u0435\u043c\u044f',
+      path: TimesheetsScreen.routePath,
+      icon: Icons.timer_rounded,
+    ),
+    NavigationDestinationData(
+      label: '\u0412\u044b\u043f\u043b\u0430\u0442\u044b',
+      path: PaymentsScreen.routePath,
+      icon: Icons.payments_rounded,
+    ),
+    NavigationDestinationData(
+      label: '\u0415\u0449\u0451',
+      path: '',
+      icon: Icons.more_horiz_rounded,
+    ),
+  ];
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.sizeOf(context).width >= 900;
@@ -328,10 +355,17 @@ class AppShell extends StatelessWidget {
     return Scaffold(
       body: child,
       bottomNavigationBar: NavigationBar(
-        selectedIndex: selectedIndex,
-        onDestinationSelected: (index) => context.go(_destinations[index].path),
+        selectedIndex: _mobileSelectedIndex(context),
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        onDestinationSelected: (index) {
+          if (index == _mobileDestinations.length - 1) {
+            _showMoreMenu(context);
+            return;
+          }
+          context.go(_mobileDestinations[index].path);
+        },
         destinations: [
-          for (final destination in _destinations)
+          for (final destination in _mobileDestinations)
             NavigationDestination(
               icon: Icon(destination.icon),
               label: destination.label,
@@ -346,6 +380,48 @@ class AppShell extends StatelessWidget {
     final index = _destinations.indexWhere((item) => item.path == location);
 
     return index < 0 ? 0 : index;
+  }
+
+  int _mobileSelectedIndex(BuildContext context) {
+    final location = GoRouterState.of(context).uri.path;
+    final index = _mobileDestinations.indexWhere(
+      (item) => item.path == location,
+    );
+    return index < 0 ? _mobileDestinations.length - 1 : index;
+  }
+
+  void _showMoreMenu(BuildContext context) {
+    final location = GoRouterState.of(context).uri.path;
+    final secondary = _destinations
+        .where(
+          (item) =>
+              !_mobileDestinations.any((mobile) => mobile.path == item.path),
+        )
+        .toList();
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+          children: [
+            for (final destination in secondary)
+              ListTile(
+                selected: destination.path == location,
+                leading: Icon(destination.icon),
+                title: Text(destination.label),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  context.go(destination.path);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

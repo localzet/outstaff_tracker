@@ -5,14 +5,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_time_formats.dart';
 import '../../../core/widgets/app_screen.dart';
+import '../../../core/widgets/responsive_data_table.dart';
 import '../data/payments_repository.dart';
 
-enum _PaymentFilter {
-  all,
-  expected,
-  overdue,
-  paid,
-  assumedPaid;
+enum _PaymentFilter { all, expected, overdue, paid, assumedPaid, problematic }
+
+enum _PaymentSortField {
+  payoutDate,
+  project,
+  expectedAmount,
+  actualAmount,
+  status,
+  balance,
 }
 
 class PaymentsScreen extends ConsumerStatefulWidget {
@@ -26,6 +30,13 @@ class PaymentsScreen extends ConsumerStatefulWidget {
 
 class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
   _PaymentFilter _filter = _PaymentFilter.all;
+  _PaymentSortField _sortField = _PaymentSortField.payoutDate;
+  bool _sortAscending = true;
+  String? _projectName;
+  String _searchText = '';
+  DateTimeRange? _dateRange;
+  bool _onlyUpcoming = false;
+  bool _onlyUnpaidOrOverdue = false;
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +60,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
             }
           },
           icon: const Icon(Icons.done_all_rounded, size: 18),
-          label: const Text('Считать прошлые выплаты оплаченными'),
+          label: const Text('Считать прошлые оплаченными'),
         ),
       ],
       children: [
@@ -63,27 +74,123 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
               );
             }
 
+            final projects = data.all
+                .map((item) => item.projectName)
+                .toSet()
+                .toList()
+              ..sort();
+            final items = _sortedItems(_filteredItems(data));
+
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                AppPanel(
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final filter in _PaymentFilter.values)
-                        ChoiceChip(
-                          selected: _filter == filter,
-                          label: Text(_filterLabel(filter)),
-                          onSelected: (_) => setState(() => _filter = filter),
+                AppFilterBar(
+                  children: [
+                    SizedBox(
+                      width: 180,
+                      child: DropdownButtonFormField<_PaymentFilter>(
+                        initialValue: _filter,
+                        isExpanded: true,
+                        decoration: const InputDecoration(labelText: 'Статус'),
+                        items: [
+                          for (final filter in _PaymentFilter.values)
+                            DropdownMenuItem(
+                              value: filter,
+                              child: Text(
+                                _filterLabel(filter),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() => _filter = value);
+                          }
+                        },
+                      ),
+                    ),
+                    SizedBox(
+                      width: 220,
+                      child: DropdownButtonFormField<String?>(
+                        initialValue: _projectName,
+                        isExpanded: true,
+                        decoration: const InputDecoration(labelText: 'Проект'),
+                        items: [
+                          const DropdownMenuItem(
+                            value: null,
+                            child: Text('Все проекты'),
+                          ),
+                          for (final project in projects)
+                            DropdownMenuItem(
+                              value: project,
+                              child: Text(
+                                project,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                        onChanged: (value) =>
+                            setState(() => _projectName = value),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 240,
+                      child: TextField(
+                        decoration: const InputDecoration(
+                          labelText: 'Поиск',
+                          hintText: 'Проект или заметка',
+                          prefixIcon: Icon(Icons.search_rounded, size: 18),
                         ),
-                    ],
-                  ),
+                        onChanged: (value) =>
+                            setState(() => _searchText = value),
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _pickDateRange,
+                      icon: const Icon(Icons.date_range_rounded, size: 18),
+                      label: Text(
+                        _dateRange == null
+                            ? 'Период'
+                            : '${DateTimeFormats.compactDate.format(_dateRange!.start)} - ${DateTimeFormats.compactDate.format(_dateRange!.end)}',
+                      ),
+                    ),
+                    FilterChip(
+                      selected: _onlyUpcoming,
+                      label: const Text('Будущие'),
+                      onSelected: (value) =>
+                          setState(() => _onlyUpcoming = value),
+                    ),
+                    FilterChip(
+                      selected: _onlyUnpaidOrOverdue,
+                      label: const Text('Не оплачены'),
+                      onSelected: (value) =>
+                          setState(() => _onlyUnpaidOrOverdue = value),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
-                PaymentSection(
-                  title: _filterLabel(_filter),
-                  items: _filteredItems(data),
+                ResponsiveDataTable<PaymentItem>(
+                  items: items,
+                  columns: _columns(),
+                  sortColumnKey: _sortField.name,
+                  sortAscending: _sortAscending,
+                  onSort: (key, ascending) {
+                    setState(() {
+                      _sortField = _PaymentSortField.values.firstWhere(
+                        (field) => field.name == key,
+                        orElse: () => _PaymentSortField.payoutDate,
+                      );
+                      _sortAscending = ascending;
+                    });
+                  },
+                  emptyTitle: 'Выплат по фильтрам нет',
+                  emptyMessage: 'Измените статус, проект, период или поиск.',
+                  mobileCardBuilder: (context, item) => _PaymentMobileCard(
+                    item: item,
+                    onMarkPaid: () => _markPaid(item),
+                    onEdit: () => _showEditDialog(item),
+                    onCopy: () => _copySummary(item),
+                  ),
                 ),
               ],
             );
@@ -98,14 +205,159 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
     );
   }
 
+  List<AppTableColumn<PaymentItem>> _columns() {
+    return [
+      AppTableColumn(
+        key: _PaymentSortField.project.name,
+        label: 'Проект',
+        width: 180,
+        cellBuilder: (context, item) => _ProjectCell(item: item),
+      ),
+      AppTableColumn(
+        key: _PaymentSortField.payoutDate.name,
+        label: 'Дата выплаты',
+        width: 118,
+        cellBuilder: (context, item) =>
+            Text(DateTimeFormats.date.format(item.payoutDate)),
+      ),
+      AppTableColumn(
+        key: 'period',
+        label: 'Период',
+        sortable: false,
+        width: 150,
+        cellBuilder: (context, item) => Text(_periodLabel(item)),
+      ),
+      AppTableColumn(
+        key: 'tracked',
+        label: 'Отработано',
+        sortable: false,
+        width: 115,
+        cellBuilder: (context, item) =>
+            Text(formatDurationSeconds(item.trackedSeconds)),
+      ),
+      AppTableColumn(
+        key: 'goal',
+        label: 'Цель периода',
+        sortable: false,
+        width: 118,
+        cellBuilder: (context, item) =>
+            Text(formatDurationSeconds(item.requiredSeconds)),
+      ),
+      AppTableColumn(
+        key: _PaymentSortField.balance.name,
+        label: 'Баланс',
+        width: 115,
+        cellBuilder: (context, item) => Text(_balanceLabel(item)),
+      ),
+      AppTableColumn(
+        key: _PaymentSortField.expectedAmount.name,
+        label: 'Ожидается',
+        numeric: true,
+        width: 112,
+        cellBuilder: (context, item) =>
+            Text(formatMoneyRub(item.expectedAmountMinor)),
+      ),
+      AppTableColumn(
+        key: _PaymentSortField.actualAmount.name,
+        label: 'Получено',
+        numeric: true,
+        width: 112,
+        cellBuilder: (context, item) => Text(
+          item.actualAmountMinor == null
+              ? '-'
+              : formatMoneyRub(item.actualAmountMinor!),
+        ),
+      ),
+      AppTableColumn(
+        key: _PaymentSortField.status.name,
+        label: 'Статус',
+        width: 180,
+        cellBuilder: (context, item) => _StatusChip(status: item.status),
+      ),
+      AppTableColumn(
+        key: 'actions',
+        label: 'Действия',
+        sortable: false,
+        width: 150,
+        cellBuilder: (context, item) => _PaymentActions(
+          item: item,
+          onMarkPaid: () => _markPaid(item),
+          onEdit: () => _showEditDialog(item),
+          onCopy: () => _copySummary(item),
+        ),
+      ),
+    ];
+  }
+
+  Future<void> _pickDateRange() async {
+    final selected = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 3650)),
+      initialDateRange: _dateRange,
+    );
+    if (selected != null) {
+      setState(() => _dateRange = selected);
+    }
+  }
+
   List<PaymentItem> _filteredItems(PaymentsSnapshot snapshot) {
-    return switch (_filter) {
+    final byStatus = switch (_filter) {
       _PaymentFilter.all => snapshot.all,
       _PaymentFilter.expected => snapshot.expected,
       _PaymentFilter.overdue => snapshot.overdue,
       _PaymentFilter.paid => snapshot.paid,
       _PaymentFilter.assumedPaid => snapshot.assumedPaid,
+      _PaymentFilter.problematic => snapshot.problematic,
     };
+    final query = _searchText.trim().toLowerCase();
+    final now = DateTime.now();
+
+    return byStatus.where((item) {
+      if (_projectName != null && item.projectName != _projectName) {
+        return false;
+      }
+      if (_onlyUpcoming &&
+          item.payoutDate.isBefore(DateTime(now.year, now.month, now.day))) {
+        return false;
+      }
+      if (_onlyUnpaidOrOverdue &&
+          item.status != PaymentStatus.expected &&
+          item.status != PaymentStatus.overdue) {
+        return false;
+      }
+      final range = _dateRange;
+      if (range != null &&
+          (item.payoutDate.isBefore(range.start) ||
+              item.payoutDate.isAfter(range.end))) {
+        return false;
+      }
+      if (query.isEmpty) {
+        return true;
+      }
+      return item.projectName.toLowerCase().contains(query) ||
+          (item.note ?? '').toLowerCase().contains(query);
+    }).toList();
+  }
+
+  List<PaymentItem> _sortedItems(List<PaymentItem> items) {
+    return [...items]..sort((left, right) {
+        final result = switch (_sortField) {
+          _PaymentSortField.payoutDate =>
+            left.payoutDate.compareTo(right.payoutDate),
+          _PaymentSortField.project =>
+            left.projectName.compareTo(right.projectName),
+          _PaymentSortField.expectedAmount =>
+            left.expectedAmountMinor.compareTo(right.expectedAmountMinor),
+          _PaymentSortField.actualAmount => (left.actualAmountMinor ?? 0)
+              .compareTo(right.actualAmountMinor ?? 0),
+          _PaymentSortField.status =>
+            left.status.index.compareTo(right.status.index),
+          _PaymentSortField.balance =>
+            left.balanceSeconds.compareTo(right.balanceSeconds),
+        };
+        return _sortAscending ? result : -result;
+      });
   }
 
   String _filterLabel(_PaymentFilter filter) {
@@ -114,135 +366,16 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
       _PaymentFilter.expected => 'Ожидаются',
       _PaymentFilter.overdue => 'Просрочены',
       _PaymentFilter.paid => 'Оплачено',
-      _PaymentFilter.assumedPaid => 'Предположительно оплачено',
+      _PaymentFilter.assumedPaid => 'Предположительно',
+      _PaymentFilter.problematic => 'Проблемные',
     };
   }
-}
 
-class PaymentSection extends StatelessWidget {
-  const PaymentSection({required this.title, required this.items, super.key});
-
-  final String title;
-  final List<PaymentItem> items;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppPanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 12),
-          if (items.isEmpty)
-            Text('Нет записей.', style: Theme.of(context).textTheme.bodyMedium)
-          else
-            for (final item in items) ...[
-              PaymentTile(item: item),
-              if (item != items.last) const Divider(height: 20),
-            ],
-        ],
-      ),
-    );
-  }
-}
-
-class PaymentTile extends ConsumerWidget {
-  const PaymentTile({required this.item, super.key});
-
-  final PaymentItem item;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox.square(
-          dimension: 12,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: _parseColor(item.color),
-              shape: BoxShape.circle,
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                item.projectName,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Дата выплаты: ${DateTimeFormats.date.format(item.payoutDate)}',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              Text(
-                'Период: ${DateTimeFormats.date.format(item.periodStart)} - '
-                '${DateTimeFormats.date.format(item.periodEnd.subtract(const Duration(days: 1)))}',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              Text(
-                'Отработано: ${formatDurationSeconds(item.trackedSeconds)}',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              Text(
-                'Цель периода: ${formatDurationSeconds(item.requiredSeconds)}',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              Text(
-                item.balanceSeconds >= 0
-                    ? 'Запас: +${formatDurationSeconds(item.balanceSeconds)}'
-                    : 'Осталось: ${formatDurationSeconds(item.balanceSeconds.abs())}',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              Text(
-                'Ожидается: ${formatMoneyRub(item.expectedAmountMinor)}'
-                '${item.actualAmountMinor == null ? '' : ' · получено: ${formatMoneyRub(item.actualAmountMinor!)}'}',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              Text(
-                item.status.label,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              if (item.note != null && item.note!.isNotEmpty)
-                Text(item.note!, style: Theme.of(context).textTheme.bodyMedium),
-            ],
-          ),
-        ),
-        const SizedBox(width: 8),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          alignment: WrapAlignment.end,
-          children: [
-            if (item.status == PaymentStatus.expected ||
-                item.status == PaymentStatus.overdue)
-              OutlinedButton(
-                onPressed: () async {
-                  await ref.read(paymentsRepositoryProvider).markPaid(item);
-                },
-                child: const Text('Оплачено'),
-              ),
-            IconButton.filledTonal(
-              onPressed: () => _showEditDialog(context, ref),
-              icon: const Icon(Icons.edit_rounded),
-              tooltip: 'Редактировать',
-            ),
-            IconButton.filledTonal(
-              onPressed: () => _copySummary(context),
-              icon: const Icon(Icons.copy_rounded),
-              tooltip: 'Скопировать',
-            ),
-          ],
-        ),
-      ],
-    );
+  Future<void> _markPaid(PaymentItem item) {
+    return ref.read(paymentsRepositoryProvider).markPaid(item);
   }
 
-  Future<void> _showEditDialog(BuildContext context, WidgetRef ref) async {
+  Future<void> _showEditDialog(PaymentItem item) async {
     final amountController = TextEditingController(
       text: ((item.actualAmountMinor ?? item.expectedAmountMinor) / 100)
           .toStringAsFixed(0),
@@ -325,28 +458,191 @@ class PaymentTile extends ConsumerWidget {
     noteController.dispose();
   }
 
-  Future<void> _copySummary(BuildContext context) async {
+  Future<void> _copySummary(PaymentItem item) async {
     final text = [
       item.projectName,
       'Дата выплаты: ${DateTimeFormats.date.format(item.payoutDate)}',
-      'Период: ${DateTimeFormats.date.format(item.periodStart)} - '
-          '${DateTimeFormats.date.format(item.periodEnd.subtract(const Duration(days: 1)))}',
+      'Период: ${_periodLabel(item)}',
       'Отработано: ${formatDurationSeconds(item.trackedSeconds)}',
       'Цель периода: ${formatDurationSeconds(item.requiredSeconds)}',
-      item.balanceSeconds >= 0
-          ? 'Запас: +${formatDurationSeconds(item.balanceSeconds)}'
-          : 'Осталось: ${formatDurationSeconds(item.balanceSeconds.abs())}',
+      'Баланс: ${_balanceLabel(item)}',
       'Ожидается: ${formatMoneyRub(item.expectedAmountMinor)}',
       if (item.actualAmountMinor != null)
         'Получено: ${formatMoneyRub(item.actualAmountMinor!)}',
       'Статус: ${item.status.label}',
     ].join('\n');
     await Clipboard.setData(ClipboardData(text: text));
-    if (context.mounted) {
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Сводка скопирована')),
       );
     }
+  }
+}
+
+class _PaymentMobileCard extends StatelessWidget {
+  const _PaymentMobileCard({
+    required this.item,
+    required this.onMarkPaid,
+    required this.onEdit,
+    required this.onCopy,
+  });
+
+  final PaymentItem item;
+  final VoidCallback onMarkPaid;
+  final VoidCallback onEdit;
+  final VoidCallback onCopy;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(child: _ProjectCell(item: item)),
+            _StatusChip(status: item.status),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 16,
+          runSpacing: 8,
+          children: [
+            _MiniMetric(
+              label: 'Дата',
+              value: DateTimeFormats.date.format(item.payoutDate),
+            ),
+            _MiniMetric(label: 'Период', value: _periodLabel(item)),
+            _MiniMetric(
+              label: 'Отработано',
+              value: formatDurationSeconds(item.trackedSeconds),
+            ),
+            _MiniMetric(label: 'Баланс', value: _balanceLabel(item)),
+            _MiniMetric(
+              label: 'Ожидается',
+              value: formatMoneyRub(item.expectedAmountMinor),
+            ),
+            if (item.actualAmountMinor != null)
+              _MiniMetric(
+                label: 'Получено',
+                value: formatMoneyRub(item.actualAmountMinor!),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        _PaymentActions(
+          item: item,
+          onMarkPaid: onMarkPaid,
+          onEdit: onEdit,
+          onCopy: onCopy,
+        ),
+      ],
+    );
+  }
+}
+
+class _PaymentActions extends StatelessWidget {
+  const _PaymentActions({
+    required this.item,
+    required this.onMarkPaid,
+    required this.onEdit,
+    required this.onCopy,
+  });
+
+  final PaymentItem item;
+  final VoidCallback onMarkPaid;
+  final VoidCallback onEdit;
+  final VoidCallback onCopy;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        if (item.status == PaymentStatus.expected ||
+            item.status == PaymentStatus.overdue)
+          OutlinedButton(
+            onPressed: onMarkPaid,
+            child: const Text('Оплачено'),
+          ),
+        IconButton.filledTonal(
+          onPressed: onEdit,
+          icon: const Icon(Icons.edit_rounded),
+          tooltip: 'Редактировать',
+        ),
+        IconButton.filledTonal(
+          onPressed: onCopy,
+          icon: const Icon(Icons.copy_rounded),
+          tooltip: 'Скопировать',
+        ),
+      ],
+    );
+  }
+}
+
+class _ProjectCell extends StatelessWidget {
+  const _ProjectCell({required this.item});
+
+  final PaymentItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox.square(
+          dimension: 10,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: _parseColor(item.color),
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Tooltip(
+            message: item.projectName,
+            child: Text(item.projectName, overflow: TextOverflow.ellipsis),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.status});
+
+  final PaymentStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppStatusChip(label: status.label, color: _statusColor(status));
+  }
+}
+
+class _MiniMetric extends StatelessWidget {
+  const _MiniMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 132,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 2),
+          Text(value, overflow: TextOverflow.ellipsis),
+        ],
+      ),
+    );
   }
 }
 
@@ -379,6 +675,28 @@ class CopyableErrorState extends StatelessWidget {
       ),
     );
   }
+}
+
+String _periodLabel(PaymentItem item) {
+  return '${DateTimeFormats.compactDate.format(item.periodStart)}–'
+      '${DateTimeFormats.compactDate.format(item.periodEnd.subtract(const Duration(days: 1)))}';
+}
+
+String _balanceLabel(PaymentItem item) {
+  return item.balanceSeconds >= 0
+      ? '+${formatDurationSeconds(item.balanceSeconds)}'
+      : '-${formatDurationSeconds(item.balanceSeconds.abs())}';
+}
+
+Color _statusColor(PaymentStatus status) {
+  return switch (status) {
+    PaymentStatus.expected => AppColors.accent,
+    PaymentStatus.overdue => AppColors.danger,
+    PaymentStatus.paid => AppColors.textMuted,
+    PaymentStatus.assumedPaid => AppColors.textMuted,
+    PaymentStatus.skipped => AppColors.warning,
+    PaymentStatus.disputed => AppColors.danger,
+  };
 }
 
 Color _parseColor(String? value) {

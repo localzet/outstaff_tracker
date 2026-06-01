@@ -8,6 +8,7 @@ class AppScreen extends StatelessWidget {
     required this.children,
     this.subtitle,
     this.actions = const [],
+    this.maxContentWidth = 1320,
     super.key,
   });
 
@@ -15,6 +16,7 @@ class AppScreen extends StatelessWidget {
   final String? subtitle;
   final List<Widget> actions;
   final List<Widget> children;
+  final double maxContentWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -24,33 +26,39 @@ class AppScreen extends StatelessWidget {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
             sliver: SliverToBoxAdapter(
-              child: Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                runSpacing: AppSpacing.md,
-                spacing: AppSpacing.md,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 620),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: Theme.of(context).textTheme.headlineMedium,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxContentWidth),
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    runSpacing: AppSpacing.md,
+                    spacing: AppSpacing.md,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 720),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              style: Theme.of(context).textTheme.headlineMedium,
+                            ),
+                            if (subtitle != null) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                subtitle!,
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ],
+                          ],
                         ),
-                        if (subtitle != null) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            subtitle!,
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                        ],
-                      ],
-                    ),
+                      ),
+                      if (actions.isNotEmpty)
+                        Wrap(spacing: 8, runSpacing: 8, children: actions),
+                    ],
                   ),
-                  if (actions.isNotEmpty) Wrap(spacing: 8, children: actions),
-                ],
+                ),
               ),
             ),
           ),
@@ -58,7 +66,12 @@ class AppScreen extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
             sliver: SliverList.separated(
               itemCount: children.length,
-              itemBuilder: (context, index) => children[index],
+              itemBuilder: (context, index) => Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxContentWidth),
+                  child: children[index],
+                ),
+              ),
               separatorBuilder: (context, index) => const SizedBox(height: 16),
             ),
           ),

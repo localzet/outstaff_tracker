@@ -7,18 +7,33 @@ import '../../../core/utils/date_time_formats.dart';
 import '../../../core/widgets/app_screen.dart';
 import '../data/projects_repository.dart';
 
-class ProjectsScreen extends ConsumerWidget {
+enum _ProjectTab { active, disabled }
+
+enum _ProjectSortField { name, rate, goal, payoutRule, updatedAt }
+
+class ProjectsScreen extends ConsumerStatefulWidget {
   const ProjectsScreen({super.key});
 
   static const routePath = '/projects';
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProjectsScreen> createState() => _ProjectsScreenState();
+}
+
+class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
+  _ProjectTab _tab = _ProjectTab.active;
+  _ProjectSortField _sortField = _ProjectSortField.name;
+  bool _sortAscending = true;
+  String _searchText = '';
+
+  @override
+  Widget build(BuildContext context) {
     final projects = ref.watch(projectConfigurationsProvider);
 
     return AppScreen(
       title: 'Проекты',
       subtitle: 'Проекты Kimai, ставки, цели и правила выплат.',
+      maxContentWidth: 1360,
       children: [
         projects.when(
           data: (items) {
@@ -29,19 +44,119 @@ class ProjectsScreen extends ConsumerWidget {
               );
             }
 
-            return AppPanel(
-              padding: EdgeInsets.zero,
-              child: ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: items.length,
-                separatorBuilder: (context, index) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  return ProjectConfigurationTile(
-                    configuration: items[index],
-                  );
-                },
-              ),
+            final filtered = _filteredItems(items);
+            return Column(
+              children: [
+                AppPanel(
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      SegmentedButton<_ProjectTab>(
+                        segments: const [
+                          ButtonSegment(
+                            value: _ProjectTab.active,
+                            label: Text('Активные'),
+                          ),
+                          ButtonSegment(
+                            value: _ProjectTab.disabled,
+                            label: Text('Отключённые'),
+                          ),
+                        ],
+                        selected: {_tab},
+                        onSelectionChanged: (value) {
+                          setState(() => _tab = value.single);
+                        },
+                      ),
+                      SizedBox(
+                        width: 280,
+                        child: TextField(
+                          decoration: const InputDecoration(
+                            labelText: 'Поиск',
+                            hintText: 'Проект или клиент',
+                            prefixIcon: Icon(Icons.search_rounded, size: 18),
+                          ),
+                          onChanged: (value) {
+                            setState(() => _searchText = value);
+                          },
+                        ),
+                      ),
+                      SizedBox(
+                        width: 220,
+                        child: DropdownButtonFormField<_ProjectSortField>(
+                          initialValue: _sortField,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Сортировка',
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: _ProjectSortField.name,
+                              child: Text('Название'),
+                            ),
+                            DropdownMenuItem(
+                              value: _ProjectSortField.rate,
+                              child: Text('Ставка'),
+                            ),
+                            DropdownMenuItem(
+                              value: _ProjectSortField.goal,
+                              child: Text('Цель'),
+                            ),
+                            DropdownMenuItem(
+                              value: _ProjectSortField.payoutRule,
+                              child: Text('Выплаты'),
+                            ),
+                            DropdownMenuItem(
+                              value: _ProjectSortField.updatedAt,
+                              child: Text('Обновлено'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() => _sortField = value);
+                            }
+                          },
+                        ),
+                      ),
+                      IconButton.filledTonal(
+                        onPressed: () {
+                          setState(() => _sortAscending = !_sortAscending);
+                        },
+                        icon: Icon(
+                          _sortAscending
+                              ? Icons.arrow_upward_rounded
+                              : Icons.arrow_downward_rounded,
+                        ),
+                        tooltip:
+                            _sortAscending ? 'По возрастанию' : 'По убыванию',
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (filtered.isEmpty)
+                  const EmptyState(
+                    title: 'Ничего не найдено',
+                    message: 'Измените вкладку, поиск или сортировку.',
+                  )
+                else
+                  AppPanel(
+                    padding: EdgeInsets.zero,
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: filtered.length,
+                      separatorBuilder: (context, index) =>
+                          const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        return ProjectConfigurationTile(
+                          configuration: filtered[index],
+                        );
+                      },
+                    ),
+                  ),
+              ],
             );
           },
           loading: () => const LinearProgressIndicator(),
@@ -52,6 +167,42 @@ class ProjectsScreen extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  List<ProjectConfiguration> _filteredItems(List<ProjectConfiguration> items) {
+    final query = _searchText.trim().toLowerCase();
+    final filtered = items.where((item) {
+      final enabled = item.appProject.enabled;
+      if (_tab == _ProjectTab.active && !enabled) {
+        return false;
+      }
+      if (_tab == _ProjectTab.disabled && enabled) {
+        return false;
+      }
+      if (query.isEmpty) {
+        return true;
+      }
+      return item.kimaiProject.name.toLowerCase().contains(query) ||
+          (item.kimaiProject.customerName ?? '').toLowerCase().contains(query);
+    }).toList();
+
+    filtered.sort((left, right) {
+      final result = switch (_sortField) {
+        _ProjectSortField.name =>
+          left.kimaiProject.name.compareTo(right.kimaiProject.name),
+        _ProjectSortField.rate => (left.appProject.hourlyRateMinor ?? 0)
+            .compareTo(right.appProject.hourlyRateMinor ?? 0),
+        _ProjectSortField.goal => (left.appProject.weeklyGoalHours ?? 0)
+            .compareTo(right.appProject.weeklyGoalHours ?? 0),
+        _ProjectSortField.payoutRule =>
+          left.appProject.payoutRule.compareTo(right.appProject.payoutRule),
+        _ProjectSortField.updatedAt =>
+          left.appProject.updatedAt.compareTo(right.appProject.updatedAt),
+      };
+      return _sortAscending ? result : -result;
+    });
+
+    return filtered;
   }
 }
 
@@ -118,11 +269,13 @@ class _ProjectConfigurationTileState
                   children: [
                     Text(
                       kimaiProject.name,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 4),
                     Text(
                       kimaiProject.customerName ?? 'Без клиента',
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
@@ -168,7 +321,7 @@ class _ProjectConfigurationTileState
                 ),
               ),
               SizedBox(
-                width: 180,
+                width: 190,
                 child: DropdownButtonFormField<PayoutRule>(
                   initialValue: payoutRule,
                   isExpanded: true,
