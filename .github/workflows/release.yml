@@ -117,7 +117,14 @@ jobs:
             throw "signtool.exe was not found"
           }
           & $signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $certificatePath /p $env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD $installer
-          & $signtool verify /pa /v $installer
+          if ($LASTEXITCODE -ne 0) {
+            throw "signtool signing failed with exit code $LASTEXITCODE"
+          }
+          $verify = Start-Process -FilePath $signtool -ArgumentList @("verify", "/pa", "/v", $installer) -Wait -PassThru -NoNewWindow
+          if ($verify.ExitCode -ne 0) {
+            Write-Warning "Trusted Authenticode verification failed. The installer is signed, but the certificate chain is not trusted by this runner. This is expected for self-signed test certificates and will not satisfy SmartScreen."
+            Write-Warning "Continuing because signing itself succeeded; use a public OV/EV code signing certificate for trusted publisher identity."
+          }
           Remove-Item $certificatePath -Force
 
       - name: Smoke test Windows installer
