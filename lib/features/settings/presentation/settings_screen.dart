@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/db/app_database.dart';
 import '../../../core/network/kimai_api_client.dart';
@@ -14,15 +13,22 @@ import '../../../core/network/network_providers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_time_formats.dart';
 import '../../../core/widgets/app_screen.dart';
+import '../../payments/data/payments_repository.dart';
 import '../../projects/data/projects_repository.dart';
 import '../../projects/presentation/projects_screen.dart';
 import '../../sync/data/sync_controller.dart';
 import '../../sync/data/sync_repository.dart';
+import '../../timesheets/data/timesheets_repository.dart';
 import '../../updates/data/update_controller.dart';
 import '../../updates/data/update_repository.dart';
 import '../../updates/data/update_service.dart';
 import '../data/app_settings.dart';
 import '../data/settings_repository.dart';
+
+final kimaiTokenExistsProvider = FutureProvider<bool>((ref) async {
+  final token = await ref.watch(secureTokenStorageProvider).readKimaiToken();
+  return token != null && token.trim().isNotEmpty;
+});
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -40,7 +46,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _capacityController = TextEditingController();
   bool _assumePastPayoutsPaid = true;
   bool _autoCheckUpdates = true;
-
+  bool _allowInsecureHttp = false;
   bool _settingsLoaded = false;
   bool _saving = false;
   ConnectionStatus _connectionStatus = const ConnectionStatus.idle();
@@ -56,16 +62,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(appSettingsProvider);
+    final tokenExists =
+        ref.watch(kimaiTokenExistsProvider).valueOrNull ?? false;
     final latestSyncLog = ref.watch(latestSyncLogProvider);
     final syncState = ref.watch(syncControllerProvider);
 
     return AppScreen(
       title: 'Настройки',
-      subtitle: 'Подключение Kimai и безопасность данных.',
+      subtitle:
+          'Подключение Kimai, обновления, безопасность и обслуживание данных.',
       children: [
         settings.when(
           data: (data) {
             _hydrateOnce(data);
+            final normalizedPreview = normalizeKimaiBaseUrl(
+              _baseUrlController.text,
+              allowInsecureHttp: _allowInsecureHttp,
+            );
 
             return AppPanel(
               child: Form(
@@ -85,18 +98,80 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         hintText: 'Например: https://kimai.example.com',
                         helperText: '/api можно не указывать',
                       ),
-                      validator: (value) {
-                        return validateKimaiHostUrl(value ?? '');
-                      },
+                      onChanged: (_) => setState(() {}),
+                      validator: (value) => validateKimaiHostUrl(
+                        value ?? '',
+                        allowInsecureHttp: _allowInsecureHttp,
+                      ),
                     ),
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _allowInsecureHttp,
+                      onChanged: (value) {
+                        setState(() => _allowInsecureHttp = value);
+                      },
+                      title: const Text('Разрешить HTTP без шифрования'),
+                      subtitle: const Text(
+                        'По умолчанию http:// автоматически заменяется на https://.',
+                      ),
+                    ),
+                    if (normalizedPreview.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Будет использоваться: $normalizedPreview',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _tokenController,
-                      decoration: const InputDecoration(
-                        labelText: 'Токен API',
-                        hintText: 'Хранится защищённо на устройстве',
+                      decoration: InputDecoration(
+                        labelText: 'API-ключ',
+                        hintText: tokenExists
+                            ? '••••••••••••••••'
+                            : 'Введите API-ключ Kimai',
+                        helperText: tokenExists
+                            ? 'Ключ сохранён. Поле можно оставить пустым.'
+                            : 'Ключ хранится защищённо на устройстве.',
                       ),
                       obscureText: true,
+                      validator: (value) {
+                        final token = value?.trim() ?? '';
+                        if (token.isEmpty && !tokenExists) {
+                          return 'Введите API-ключ';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            _tokenController.clear();
+                            FocusScope.of(context).requestFocus(FocusNode());
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content:
+                                    Text('Введите новый API-ключ в поле выше'),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.key_rounded, size: 18),
+                          label: const Text('Заменить ключ'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: tokenExists ? _deleteToken : null,
+                          icon: const Icon(
+                            Icons.delete_outline_rounded,
+                            size: 18,
+                          ),
+                          label: const Text('Удалить ключ'),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
@@ -108,7 +183,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         labelText: 'Комфортная загрузка в неделю',
                         suffixText: 'ч',
                         helperText:
-                            'Используется для оценки свободной мощности.',
+                            'Используется для оценки свободной рабочей мощности.',
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -122,7 +197,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         'Считать прошлые выплаты предположительно оплаченными',
                       ),
                       subtitle: const Text(
-                        'Скрывает старые выплаты из списка действий после первого импорта.',
+                        'Старые выплаты не будут мешать в списке ожидаемых действий.',
                       ),
                     ),
                     SwitchListTile(
@@ -133,7 +208,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       },
                       title: const Text('Проверять обновления автоматически'),
                       subtitle: const Text(
-                        'Приложение проверяет новую версию не чаще одного раза в день и не мешает запуску.',
+                        'Приложение проверяет новую версию не чаще одного раза в день.',
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -188,6 +263,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ConnectionStatusBlock(status: _connectionStatus),
         const UpdateStatusBlock(),
         SyncProgressBlock(syncState: syncState),
+        const FinancialMaintenancePanel(),
         const DataSafetyPanel(),
         latestSyncLog.when(
           data: (log) => LastSyncStatusBlock(
@@ -197,7 +273,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           loading: () => const LinearProgressIndicator(),
           error: (error, stackTrace) => EmptyState(
-            title: 'Last sync status is unavailable',
+            title: 'Статус синхронизации недоступен',
             message: error.toString(),
           ),
         ),
@@ -215,6 +291,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         settings.comfortableWeeklyCapacityHours.toStringAsFixed(0);
     _assumePastPayoutsPaid = settings.assumePastPayoutsPaid;
     _autoCheckUpdates = settings.autoCheckUpdates;
+    _allowInsecureHttp = settings.allowInsecureKimaiHttp;
     _settingsLoaded = true;
   }
 
@@ -231,8 +308,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             _capacityController.text.trim().replaceAll(',', '.'),
           ) ??
           currentSettings.comfortableWeeklyCapacityHours;
+      final normalizedBaseUrl = normalizeKimaiBaseUrl(
+        _baseUrlController.text,
+        allowInsecureHttp: _allowInsecureHttp,
+      );
       final settings = AppSettings(
-        baseUrl: normalizeKimaiBaseUrl(_baseUrlController.text),
+        baseUrl: normalizedBaseUrl,
         currency: 'RUB',
         locale: 'ru_RU',
         comfortableWeeklyCapacityHours: capacity,
@@ -240,6 +321,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         autoCheckUpdates: _autoCheckUpdates,
         includePrereleaseUpdates: currentSettings.includePrereleaseUpdates,
         lastUpdateCheckAt: currentSettings.lastUpdateCheckAt,
+        allowInsecureKimaiHttp: _allowInsecureHttp,
       );
 
       await ref.read(settingsRepositoryProvider).saveSettings(settings);
@@ -250,9 +332,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _tokenController.clear();
       }
 
+      _baseUrlController.text = normalizedBaseUrl;
       ref
         ..invalidate(appSettingsProvider)
-        ..invalidate(kimaiApiClientProvider);
+        ..invalidate(kimaiApiClientProvider)
+        ..invalidate(kimaiTokenExistsProvider);
 
       if (mounted && showFeedback) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -266,6 +350,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         setState(() => _saving = false);
       }
     }
+  }
+
+  Future<void> _deleteToken() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удалить API-ключ?'),
+        content: const Text(
+          'Подключение к Kimai перестанет работать до ввода нового ключа.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    await ref.read(secureTokenStorageProvider).deleteKimaiToken();
+    _tokenController.clear();
+    ref
+      ..invalidate(kimaiTokenExistsProvider)
+      ..invalidate(kimaiApiClientProvider);
   }
 
   Future<void> _connectKimai() async {
@@ -325,7 +440,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (error is DioException) {
       final statusCode = error.response?.statusCode;
       if (statusCode == 401 || statusCode == 403) {
-        return 'Токен Kimai не принят.';
+        return 'API-ключ Kimai не принят.';
       }
 
       if (error.type == DioExceptionType.connectionTimeout ||
@@ -361,6 +476,117 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 }
 
+class FinancialMaintenancePanel extends ConsumerWidget {
+  const FinancialMaintenancePanel({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final diagnostics = ref.watch(financialDiagnosticsProvider);
+
+    return diagnostics.when(
+      data: (data) => AppPanel(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Финансовая целостность',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Активных проектов: ${data.enabledProjectsCount}. '
+              'Без ставки: ${data.enabledProjectsWithZeroRate}. '
+              'Записей с часами без суммы: ${data.zeroAmountTimesheetsCount}.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: data.zeroAmountTimesheetsCount == 0
+                      ? null
+                      : () => _repairAmounts(context, ref),
+                  icon: const Icon(Icons.calculate_rounded, size: 18),
+                  label: const Text('Пересчитать суммы'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => _copyFinancialDiagnostics(context, data),
+                  icon: const Icon(Icons.copy_rounded, size: 18),
+                  label: const Text('Скопировать финансовую диагностику'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      loading: () => const LinearProgressIndicator(),
+      error: (error, stackTrace) => EmptyState(
+        title: 'Финансовая диагностика недоступна',
+        message: error.toString(),
+      ),
+    );
+  }
+
+  Future<void> _repairAmounts(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Пересчитать суммы?'),
+        content: const Text(
+          'Будут обновлены только записи с длительностью больше нуля и пустой суммой. '
+          'Длительность и данные Kimai не изменятся.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Пересчитать'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    final summary = await ref
+        .read(timesheetsRepositoryProvider)
+        .repairZeroAmountTimesheets();
+    ref
+      ..invalidate(financialDiagnosticsProvider)
+      ..invalidate(currentWeekSummaryProvider)
+      ..invalidate(projectWeekSummariesProvider)
+      ..invalidate(weeklyProgressHistoryProvider)
+      ..invalidate(paymentsSnapshotProvider)
+      ..invalidate(latestSyncLogProvider);
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Пересчитано записей: ${summary.rowsFixed}'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _copyFinancialDiagnostics(
+    BuildContext context,
+    FinancialDiagnostics data,
+  ) async {
+    await Clipboard.setData(ClipboardData(text: data.toReport()));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Финансовая диагностика скопирована')),
+      );
+    }
+  }
+}
+
 class UpdateStatusBlock extends ConsumerWidget {
   const UpdateStatusBlock({super.key});
 
@@ -373,6 +599,13 @@ class UpdateStatusBlock extends ConsumerWidget {
     final updateAvailable = result?.hasUpdate ?? false;
     final nativeUpdatesSupported =
         result?.installMode == UpdateInstallMode.native;
+    final actionLabel = nativeUpdatesSupported
+        ? 'Обновить'
+        : result?.platformLabel == 'Android'
+            ? 'Скачать APK'
+            : result?.selectedAsset == null
+                ? 'Открыть релиз'
+                : 'Скачать установщик';
     final statusText = state.isChecking
         ? 'Проверяем обновления...'
         : state.lastError != null
@@ -439,10 +672,7 @@ class UpdateStatusBlock extends ConsumerWidget {
                 FilledButton.icon(
                   onPressed: nativeUpdatesSupported
                       ? () => controller.installLatestUpdate()
-                      : () => launchUrl(
-                            Uri.parse(result!.metadata.releaseNotesUrl),
-                            mode: LaunchMode.externalApplication,
-                          ),
+                      : () => controller.installLatestUpdate(),
                   icon: Icon(
                     nativeUpdatesSupported
                         ? Icons.download_rounded
@@ -450,7 +680,7 @@ class UpdateStatusBlock extends ConsumerWidget {
                     size: 18,
                   ),
                   label: Text(
-                    nativeUpdatesSupported ? 'Обновить' : 'Открыть релиз',
+                    actionLabel,
                   ),
                 ),
             ],
@@ -489,7 +719,7 @@ class SyncProgressBlock extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              '${syncState.currentProject ?? 'Preparing'} · $completed/$total projects',
+              '${syncState.currentProject ?? 'Подготовка'} · $completed/$total проектов',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
           ],
@@ -549,7 +779,7 @@ class DataSafetyPanel extends ConsumerWidget {
           OutlinedButton.icon(
             onPressed: () => _clearSettings(context, ref),
             icon: const Icon(Icons.delete_outline_rounded, size: 18),
-            label: const Text('Очистить настройки и токен'),
+            label: const Text('Очистить настройки и ключ'),
           ),
         ],
       ),
@@ -560,9 +790,7 @@ class DataSafetyPanel extends ConsumerWidget {
     final backup =
         await ref.read(settingsRepositoryProvider).exportSettingsBackup();
     await Clipboard.setData(
-      ClipboardData(
-        text: const JsonEncoder.withIndent('  ').convert(backup),
-      ),
+      ClipboardData(text: const JsonEncoder.withIndent('  ').convert(backup)),
     );
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -601,7 +829,9 @@ class DataSafetyPanel extends ConsumerWidget {
 
     final decoded = jsonDecode(jsonText);
     if (decoded is! Map<String, Object?>) {
-      throw const FormatException('Резервная копия должна быть JSON-объектом.');
+      throw const FormatException(
+        'Резервная копия должна быть JSON-объектом.',
+      );
     }
     await ref.read(settingsRepositoryProvider).importSettingsBackup(decoded);
     ref.invalidate(appSettingsProvider);
@@ -614,7 +844,7 @@ class DataSafetyPanel extends ConsumerWidget {
       builder: (context) => AlertDialog(
         title: const Text('Очистить настройки?'),
         content: const Text(
-          'Адрес Kimai, состояние onboarding и API-токен будут удалены.',
+          'Адрес Kimai, состояние onboarding и API-ключ будут удалены.',
         ),
         actions: [
           TextButton(
@@ -634,8 +864,10 @@ class DataSafetyPanel extends ConsumerWidget {
 
     await ref.read(settingsRepositoryProvider).clearLocalSettings();
     await ref.read(secureTokenStorageProvider).deleteKimaiToken();
-    ref.invalidate(appSettingsProvider);
-    ref.invalidate(kimaiApiClientProvider);
+    ref
+      ..invalidate(appSettingsProvider)
+      ..invalidate(kimaiApiClientProvider)
+      ..invalidate(kimaiTokenExistsProvider);
   }
 }
 
@@ -650,7 +882,7 @@ class ConnectionStatus {
   const ConnectionStatus.idle()
       : this._(
           label: 'Не подключено',
-          message: 'Сохраните адрес Kimai и токен, затем подключитесь.',
+          message: 'Сохраните адрес Kimai и API-ключ, затем подключитесь.',
           color: AppColors.textMuted,
           icon: Icons.radio_button_unchecked_rounded,
         );
@@ -742,8 +974,8 @@ class LastSyncStatusBlock extends StatelessWidget {
 
     final finishedAt = log!.finishedAt;
     final message = finishedAt == null
-        ? '${log!.status}: ${log!.message ?? 'In progress'}'
-        : '${log!.status}: ${log!.message ?? 'No details'}';
+        ? '${log!.status}: ${log!.message ?? 'Выполняется'}'
+        : '${log!.status}: ${log!.message ?? 'Без деталей'}';
 
     return AppPanel(
       child: Row(
@@ -785,3 +1017,8 @@ class LastSyncStatusBlock extends StatelessWidget {
     return '${DateTimeFormats.date.format(value)} ${DateTimeFormats.time.format(value)}';
   }
 }
+
+final financialDiagnosticsProvider =
+    FutureProvider<FinancialDiagnostics>((ref) {
+  return ref.watch(timesheetsRepositoryProvider).getFinancialDiagnostics();
+});

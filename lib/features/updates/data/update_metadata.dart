@@ -38,6 +38,7 @@ class UpdateMetadata {
     required this.version,
     required this.releaseNotesUrl,
     required this.windowsInstaller,
+    this.androidApk,
     required this.prerelease,
     this.pubspecVersion,
     this.publishedAt,
@@ -65,6 +66,7 @@ class UpdateMetadata {
     if (windowsInstallerJson is! Map) {
       throw const FormatException('Windows installer asset is missing.');
     }
+    final androidApkJson = assets['androidApk'];
 
     return UpdateMetadata(
       tag: tag,
@@ -76,6 +78,9 @@ class UpdateMetadata {
       windowsInstaller: ReleaseAsset.fromJson(
         Map<String, Object?>.from(windowsInstallerJson),
       ),
+      androidApk: androidApkJson is Map
+          ? ReleaseAsset.fromJson(Map<String, Object?>.from(androidApkJson))
+          : null,
     );
   }
 
@@ -106,6 +111,7 @@ class UpdateMetadata {
       releaseNotesUrl: releaseNotesUrl,
       prerelease: json['prerelease'] == true,
       windowsInstaller: chooseWindowsInstallerAsset(assets),
+      androidApk: chooseAndroidApkAssetOrNull(assets),
     );
   }
 
@@ -115,9 +121,25 @@ class UpdateMetadata {
   final DateTime? publishedAt;
   final String releaseNotesUrl;
   final ReleaseAsset windowsInstaller;
+  final ReleaseAsset? androidApk;
   final bool prerelease;
 
   SemanticVersion get semanticVersion => SemanticVersion.parse(version);
+}
+
+ReleaseAsset? chooseAndroidApkAssetOrNull(List<ReleaseAsset> assets) {
+  final candidates = assets.where((asset) {
+    final name = asset.name.toLowerCase();
+    return name.startsWith('outstaff_tracker-android-') &&
+        name.endsWith('.apk');
+  }).toList();
+
+  if (candidates.isEmpty) {
+    return null;
+  }
+
+  candidates.sort((left, right) => left.name.compareTo(right.name));
+  return candidates.last;
 }
 
 ReleaseAsset chooseWindowsInstallerAsset(List<ReleaseAsset> assets) {

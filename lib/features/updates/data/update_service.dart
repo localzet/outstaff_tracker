@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'native_update_runner.dart';
@@ -11,6 +12,8 @@ enum UpdateInstallMode {
 
 abstract interface class UpdateService {
   UpdateInstallMode get installMode;
+
+  String get sourceUrl;
 
   Future<UpdateMetadata> fetchLatestMetadata();
 
@@ -43,6 +46,9 @@ class NativeAutoUpdaterService implements UpdateService {
 
   @override
   UpdateInstallMode get installMode => UpdateInstallMode.native;
+
+  @override
+  String get sourceUrl => latestJsonUrl;
 
   @override
   Future<UpdateMetadata> fetchLatestMetadata() async {
@@ -89,6 +95,9 @@ class GitHubReleaseUpdateService implements UpdateService {
   UpdateInstallMode get installMode => UpdateInstallMode.browser;
 
   @override
+  String get sourceUrl => latestReleaseUrl;
+
+  @override
   Future<UpdateMetadata> fetchLatestMetadata() async {
     final response = await _dio.getUri<Map<String, Object?>>(
       Uri.parse(latestReleaseUrl),
@@ -110,14 +119,40 @@ class GitHubReleaseUpdateService implements UpdateService {
 
   @override
   Future<void> startUpdate(UpdateMetadata metadata) async {
-    final assetUrl = Uri.parse(metadata.windowsInstaller.url);
+    final asset = updateAssetForPlatform(metadata);
+    final assetUrl = asset == null ? null : Uri.parse(asset.url);
     final releaseUrl = Uri.parse(metadata.releaseNotesUrl);
-    final openedAsset = await launchUrl(
-      assetUrl,
-      mode: LaunchMode.externalApplication,
-    );
+    final openedAsset = assetUrl != null &&
+        await launchUrl(assetUrl, mode: LaunchMode.externalApplication);
     if (!openedAsset) {
       await launchUrl(releaseUrl, mode: LaunchMode.externalApplication);
     }
   }
+}
+
+ReleaseAsset? updateAssetForPlatform(UpdateMetadata metadata) {
+  if (kIsWeb) {
+    return null;
+  }
+
+  return switch (defaultTargetPlatform) {
+    TargetPlatform.windows => metadata.windowsInstaller,
+    TargetPlatform.android => metadata.androidApk,
+    _ => null,
+  };
+}
+
+String updatePlatformLabel() {
+  if (kIsWeb) {
+    return 'Web';
+  }
+
+  return switch (defaultTargetPlatform) {
+    TargetPlatform.android => 'Android',
+    TargetPlatform.windows => 'Windows',
+    TargetPlatform.macOS => 'macOS',
+    TargetPlatform.linux => 'Linux',
+    TargetPlatform.iOS => 'iOS',
+    TargetPlatform.fuchsia => 'Fuchsia',
+  };
 }

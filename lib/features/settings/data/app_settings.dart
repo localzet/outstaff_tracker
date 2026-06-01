@@ -8,6 +8,7 @@ class AppSettings {
     required this.autoCheckUpdates,
     required this.includePrereleaseUpdates,
     required this.lastUpdateCheckAt,
+    required this.allowInsecureKimaiHttp,
   });
 
   static const defaults = AppSettings(
@@ -19,6 +20,7 @@ class AppSettings {
     autoCheckUpdates: true,
     includePrereleaseUpdates: false,
     lastUpdateCheckAt: null,
+    allowInsecureKimaiHttp: false,
   );
 
   final String baseUrl;
@@ -29,6 +31,7 @@ class AppSettings {
   final bool autoCheckUpdates;
   final bool includePrereleaseUpdates;
   final DateTime? lastUpdateCheckAt;
+  final bool allowInsecureKimaiHttp;
 
   AppSettings copyWith({
     String? baseUrl,
@@ -39,6 +42,7 @@ class AppSettings {
     bool? autoCheckUpdates,
     bool? includePrereleaseUpdates,
     DateTime? lastUpdateCheckAt,
+    bool? allowInsecureKimaiHttp,
   }) {
     return AppSettings(
       baseUrl: baseUrl ?? this.baseUrl,
@@ -52,6 +56,8 @@ class AppSettings {
       includePrereleaseUpdates:
           includePrereleaseUpdates ?? this.includePrereleaseUpdates,
       lastUpdateCheckAt: lastUpdateCheckAt ?? this.lastUpdateCheckAt,
+      allowInsecureKimaiHttp:
+          allowInsecureKimaiHttp ?? this.allowInsecureKimaiHttp,
     );
   }
 }

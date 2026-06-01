@@ -39,6 +39,13 @@ void main() {
             'sha256': 'abc123',
             'size': 42,
           },
+          'androidApk': {
+            'name': 'outstaff_tracker-android-1.0.2.apk',
+            'url':
+                'https://github.com/localzet/outstaff_tracker/releases/download/v1.0.2/outstaff_tracker-android-1.0.2.apk',
+            'sha256': 'def456',
+            'size': 84,
+          },
         },
       });
 
@@ -48,6 +55,7 @@ void main() {
         'outstaff_tracker-setup-1.0.2.exe',
       );
       expect(metadata.windowsInstaller.sha256, 'abc123');
+      expect(metadata.androidApk?.name, 'outstaff_tracker-android-1.0.2.apk');
     });
 
     test('chooses installer asset and ignores portable zip', () {
@@ -82,12 +90,33 @@ void main() {
             'browser_download_url': 'https://example.com/setup.exe',
             'size': 100,
           },
+          {
+            'name': 'outstaff_tracker-android-1.0.3.apk',
+            'browser_download_url': 'https://example.com/app.apk',
+            'size': 200,
+          },
         ],
       });
 
       expect(metadata.version, '1.0.3');
       expect(metadata.prerelease, isFalse);
       expect(metadata.windowsInstaller.url, 'https://example.com/setup.exe');
+      expect(metadata.androidApk?.url, 'https://example.com/app.apk');
+    });
+
+    test('chooses Android APK and ignores app bundle', () {
+      final asset = chooseAndroidApkAssetOrNull(const [
+        ReleaseAsset(
+          name: 'outstaff_tracker-android-1.0.2.aab',
+          url: 'https://example.com/app.aab',
+        ),
+        ReleaseAsset(
+          name: 'outstaff_tracker-android-1.0.2.apk',
+          url: 'https://example.com/app.apk',
+        ),
+      ]);
+
+      expect(asset?.name, 'outstaff_tracker-android-1.0.2.apk');
     });
 
     test('marks newer release as available', () {

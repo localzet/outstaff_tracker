@@ -18,6 +18,7 @@ class SettingsRepository {
   static const includePrereleaseUpdatesKey =
       'settings.updates.include_prerelease';
   static const lastUpdateCheckAtKey = 'settings.updates.last_checked_at';
+  static const allowInsecureKimaiHttpKey = 'settings.kimai.allow_insecure_http';
 
   final AppDatabase _database;
 
@@ -47,6 +48,9 @@ class SettingsRepository {
       lastUpdateCheckAt: DateTime.tryParse(
         values[lastUpdateCheckAtKey] ?? '',
       )?.toLocal(),
+      allowInsecureKimaiHttp:
+          bool.tryParse(values[allowInsecureKimaiHttpKey] ?? '') ??
+              AppSettings.defaults.allowInsecureKimaiHttp,
     );
   }
 
@@ -70,6 +74,10 @@ class SettingsRepository {
       await _upsertValue(
         includePrereleaseUpdatesKey,
         settings.includePrereleaseUpdates.toString(),
+      );
+      await _upsertValue(
+        allowInsecureKimaiHttpKey,
+        settings.allowInsecureKimaiHttp.toString(),
       );
       final lastUpdateCheckAt = settings.lastUpdateCheckAt;
       if (lastUpdateCheckAt != null) {
@@ -109,6 +117,7 @@ class SettingsRepository {
       autoCheckUpdatesKey,
       includePrereleaseUpdatesKey,
       lastUpdateCheckAtKey,
+      allowInsecureKimaiHttpKey,
     };
 
     return {
@@ -128,6 +137,7 @@ class SettingsRepository {
       autoCheckUpdatesKey,
       includePrereleaseUpdatesKey,
       lastUpdateCheckAtKey,
+      allowInsecureKimaiHttpKey,
     };
     await _database.transaction(() async {
       for (final entry in values.entries) {

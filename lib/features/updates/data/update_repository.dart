@@ -62,6 +62,7 @@ class UpdateRepository {
 
     return UpdateCheckResult(
       currentVersion: packageInfo.version,
+      currentBuildNumber: packageInfo.buildNumber,
       metadata: metadata,
       decision: decision,
       service: serviceResult.service,
@@ -94,12 +95,14 @@ class UpdateRepository {
 class UpdateCheckResult {
   const UpdateCheckResult({
     required this.currentVersion,
+    required this.currentBuildNumber,
     required this.metadata,
     required this.decision,
     required this.service,
   });
 
   final String currentVersion;
+  final String currentBuildNumber;
   final UpdateMetadata metadata;
   final UpdateDecision decision;
   final UpdateService service;
@@ -107,6 +110,30 @@ class UpdateCheckResult {
   bool get hasUpdate => decision.isAvailable;
 
   UpdateInstallMode get installMode => service.installMode;
+
+  ReleaseAsset? get selectedAsset => updateAssetForPlatform(metadata);
+
+  String get platformLabel => updatePlatformLabel();
+
+  String get updateSourceUrl => service.sourceUrl;
+
+  String get eligibilityReason {
+    if (!hasUpdate) {
+      return switch (decision.status) {
+        UpdateDecisionStatus.current => 'Текущая версия не ниже последней.',
+        UpdateDecisionStatus.ignoredPrerelease =>
+          'Предрелизная версия пропущена настройками.',
+        UpdateDecisionStatus.available => 'Обновление доступно.',
+      };
+    }
+    if (selectedAsset == null) {
+      return platformLabel == 'Web'
+          ? 'Web-версия обновляется на сервере.'
+          : 'Для этой платформы нет подходящего файла релиза.';
+    }
+
+    return 'Подходящий файл: ${selectedAsset!.name}';
+  }
 }
 
 class _UpdateServiceResult {

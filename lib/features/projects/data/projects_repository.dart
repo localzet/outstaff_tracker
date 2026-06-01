@@ -250,14 +250,41 @@ class ProjectsRepository {
       );
 
       if (clearHourlyRate || hourlyRateMinor != null) {
+        final rateEffectiveFrom = await _rateEffectiveFrom(
+          appProjectId: appProjectId,
+          existing: existing,
+          fallback: now,
+        );
         await _recordRateChange(
           appProjectId: appProjectId,
           previousRateMinor: existing?.hourlyRateMinor,
           nextRateMinor: clearHourlyRate ? null : hourlyRateMinor,
-          effectiveFrom: now,
+          effectiveFrom: rateEffectiveFrom,
+          createdAt: now,
         );
       }
     });
+  }
+
+  Future<DateTime> _rateEffectiveFrom({
+    required String appProjectId,
+    required AppProject? existing,
+    required DateTime fallback,
+  }) async {
+    final hasRateHistory = await (_database.select(_database.projectRateHistory)
+          ..where((table) => table.projectId.equals(appProjectId)))
+        .getSingleOrNull();
+    if (hasRateHistory != null) {
+      return fallback;
+    }
+
+    final earliestTimesheet = await (_database.select(_database.timesheets)
+          ..where((table) => table.appProjectId.equals(appProjectId))
+          ..orderBy([(table) => OrderingTerm.asc(table.beginAt)])
+          ..limit(1))
+        .getSingleOrNull();
+
+    return earliestTimesheet?.beginAt ?? existing?.createdAt ?? fallback;
   }
 
   Future<void> _recordRateChange({
@@ -265,6 +292,7 @@ class ProjectsRepository {
     required int? previousRateMinor,
     required int? nextRateMinor,
     required DateTime effectiveFrom,
+    required DateTime createdAt,
   }) async {
     if (previousRateMinor == nextRateMinor) {
       return;
@@ -281,11 +309,11 @@ class ProjectsRepository {
 
     await _database.into(_database.projectRateHistory).insert(
           ProjectRateHistoryCompanion.insert(
-            id: 'rate_${effectiveFrom.microsecondsSinceEpoch}_$appProjectId',
+            id: 'rate_${createdAt.microsecondsSinceEpoch}_$appProjectId',
             projectId: appProjectId,
             hourlyRateMinor: nextRateMinor,
             effectiveFrom: effectiveFrom,
-            createdAt: effectiveFrom,
+            createdAt: createdAt,
           ),
         );
   }

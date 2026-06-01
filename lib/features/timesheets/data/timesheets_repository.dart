@@ -146,6 +146,88 @@ class TimesheetProjectOption {
   final String name;
 }
 
+class ProjectFinancialDiagnostics {
+  const ProjectFinancialDiagnostics({
+    required this.kimaiProjectId,
+    required this.appProjectId,
+    required this.projectName,
+    required this.hourlyRateMinor,
+    required this.timesheetsCount,
+    required this.zeroAmountTimesheetsCount,
+    required this.totalDurationSeconds,
+    required this.totalAmountMinor,
+  });
+
+  final int? kimaiProjectId;
+  final String appProjectId;
+  final String projectName;
+  final int? hourlyRateMinor;
+  final int timesheetsCount;
+  final int zeroAmountTimesheetsCount;
+  final int totalDurationSeconds;
+  final int totalAmountMinor;
+}
+
+class FinancialDiagnostics {
+  const FinancialDiagnostics({
+    required this.enabledProjectsCount,
+    required this.enabledProjectsWithZeroRate,
+    required this.zeroAmountTimesheetsCount,
+    required this.projects,
+  });
+
+  final int enabledProjectsCount;
+  final int enabledProjectsWithZeroRate;
+  final int zeroAmountTimesheetsCount;
+  final List<ProjectFinancialDiagnostics> projects;
+
+  String toReport() {
+    return [
+      'financial_integrity',
+      'enabled_projects=$enabledProjectsCount',
+      'enabled_projects_with_zero_rate=$enabledProjectsWithZeroRate',
+      'zero_amount_timesheets=$zeroAmountTimesheetsCount',
+      for (final project in projects) ...[
+        'project=${project.projectName}',
+        '  kimai_project_id=${project.kimaiProjectId ?? 'none'}',
+        '  app_project_id=${project.appProjectId}',
+        '  hourly_rate_minor=${project.hourlyRateMinor ?? 0}',
+        '  timesheets_count=${project.timesheetsCount}',
+        '  zero_amount_timesheets=${project.zeroAmountTimesheetsCount}',
+        '  total_duration_seconds=${project.totalDurationSeconds}',
+        '  total_amount_minor=${project.totalAmountMinor}',
+      ],
+    ].join('\n');
+  }
+}
+
+class ProjectAmountRepairSummary {
+  const ProjectAmountRepairSummary({
+    required this.projectName,
+    required this.rowsFixed,
+    required this.oldTotalMinor,
+    required this.newTotalMinor,
+  });
+
+  final String projectName;
+  final int rowsFixed;
+  final int oldTotalMinor;
+  final int newTotalMinor;
+}
+
+class AmountRepairSummary {
+  const AmountRepairSummary({required this.projects});
+
+  final List<ProjectAmountRepairSummary> projects;
+
+  int get rowsFixed =>
+      projects.fold(0, (sum, project) => sum + project.rowsFixed);
+  int get oldTotalMinor =>
+      projects.fold(0, (sum, project) => sum + project.oldTotalMinor);
+  int get newTotalMinor =>
+      projects.fold(0, (sum, project) => sum + project.newTotalMinor);
+}
+
 class TimesheetsRepository {
   TimesheetsRepository(this._database);
 
@@ -423,7 +505,7 @@ class TimesheetsRepository {
               durationSeconds: Value(item.durationSeconds),
               rate: Value(item.rate),
               amountMinor: Value(
-                _calculateAmountMinor(
+                calculateTimesheetAmountMinor(
                   durationSeconds: item.durationSeconds,
                   hourlyRateMinor: _rateForTimesheet(
                     project: projectsByKimaiId[item.projectId],
@@ -441,6 +523,159 @@ class TimesheetsRepository {
         ],
       );
     });
+  }
+
+  Future<FinancialDiagnostics> getFinancialDiagnostics() async {
+    final rows = await _database.select(_database.appProjects).join([
+      leftOuterJoin(
+        _database.kimaiProjects,
+        _database.kimaiProjects.id.equalsExp(
+          _database.appProjects.kimaiProjectId,
+        ),
+      ),
+    ]).get();
+    final enabledRows = rows
+        .where((row) => row.readTable(_database.appProjects).enabled)
+        .toList(growable: false);
+    final projects = <ProjectFinancialDiagnostics>[];
+
+    for (final row in enabledRows) {
+      final appProject = row.readTable(_database.appProjects);
+      final kimaiProject = row.readTableOrNull(_database.kimaiProjects);
+      final timesheets = await (_database.select(_database.timesheets)
+            ..where((table) => table.appProjectId.equals(appProject.id)))
+          .get();
+      final zeroAmountTimesheets = timesheets
+          .where(
+            (timesheet) =>
+                timesheet.durationSeconds > 0 &&
+                ((timesheet.amountMinor ?? 0) == 0),
+          )
+          .length;
+
+      projects.add(
+        ProjectFinancialDiagnostics(
+          kimaiProjectId: appProject.kimaiProjectId,
+          appProjectId: appProject.id,
+          projectName: kimaiProject?.name ?? appProject.name,
+          hourlyRateMinor: appProject.hourlyRateMinor,
+          timesheetsCount: timesheets.length,
+          zeroAmountTimesheetsCount: zeroAmountTimesheets,
+          totalDurationSeconds: timesheets.fold(
+            0,
+            (sum, timesheet) => sum + timesheet.durationSeconds,
+          ),
+          totalAmountMinor: timesheets.fold(
+            0,
+            (sum, timesheet) => sum + (timesheet.amountMinor ?? 0),
+          ),
+        ),
+      );
+    }
+
+    return FinancialDiagnostics(
+      enabledProjectsCount: enabledRows.length,
+      enabledProjectsWithZeroRate: enabledRows
+          .where(
+            (row) =>
+                (row.readTable(_database.appProjects).hourlyRateMinor ?? 0) <=
+                0,
+          )
+          .length,
+      zeroAmountTimesheetsCount: projects.fold(
+        0,
+        (sum, project) => sum + project.zeroAmountTimesheetsCount,
+      ),
+      projects: projects,
+    );
+  }
+
+  Future<AmountRepairSummary> repairZeroAmountTimesheets() async {
+    final appProjects = await (_database.select(_database.appProjects)
+          ..where((table) => table.enabled.equals(true)))
+        .get();
+    final rateHistory =
+        await _database.select(_database.projectRateHistory).get();
+    final summaries = <ProjectAmountRepairSummary>[];
+
+    await _database.transaction(() async {
+      for (final project in appProjects) {
+        final rows = await (_database.select(_database.timesheets)
+              ..where((table) => table.appProjectId.equals(project.id))
+              ..where((table) => table.durationSeconds.isBiggerThanValue(0))
+              ..where(
+                (table) =>
+                    table.amountMinor.isNull() | table.amountMinor.equals(0),
+              ))
+            .get();
+        if (rows.isEmpty) {
+          continue;
+        }
+
+        var rowsFixed = 0;
+        var oldTotal = 0;
+        var newTotal = 0;
+        for (final timesheet in rows) {
+          final rate = _rateForTimesheet(
+                project: project,
+                rateHistory: rateHistory,
+                beginAt: timesheet.beginAt,
+              ) ??
+              project.hourlyRateMinor;
+          final amount = calculateTimesheetAmountMinor(
+            durationSeconds: timesheet.durationSeconds,
+            hourlyRateMinor: rate,
+          );
+          if (amount == null || amount <= 0) {
+            continue;
+          }
+
+          oldTotal += timesheet.amountMinor ?? 0;
+          newTotal += amount;
+          rowsFixed++;
+          await (_database.update(_database.timesheets)
+                ..where((table) => table.id.equals(timesheet.id)))
+              .write(TimesheetsCompanion(amountMinor: Value(amount)));
+        }
+
+        if (rowsFixed > 0) {
+          summaries.add(
+            ProjectAmountRepairSummary(
+              projectName: project.name,
+              rowsFixed: rowsFixed,
+              oldTotalMinor: oldTotal,
+              newTotalMinor: newTotal,
+            ),
+          );
+        }
+      }
+
+      if (summaries.isNotEmpty) {
+        final now = DateTime.now().toUtc();
+        await _database.into(_database.syncLogs).insert(
+              SyncLogsCompanion.insert(
+                id: 'amount_repair_${now.microsecondsSinceEpoch}',
+                operation: 'amount_repair',
+                status: 'success',
+                message: Value('Fixed ${summaries.fold<int>(
+                  0,
+                  (sum, item) => sum + item.rowsFixed,
+                )} rows'),
+                debug: Value(
+                  [
+                    for (final summary in summaries)
+                      '${summary.projectName}: rows=${summary.rowsFixed}, '
+                          'old=${summary.oldTotalMinor}, new=${summary.newTotalMinor}',
+                  ].join('\n'),
+                ),
+                startedAt: now,
+                finishedAt: Value(now),
+              ),
+            );
+      }
+    });
+
+    return AmountRepairSummary(projects: summaries);
   }
 
   Future<List<Timesheet>> _timesheetsInRange(DateTime begin, DateTime end) {
@@ -617,7 +852,7 @@ final weeklyProgressHistoryProvider =
   return (begin: begin, end: begin.add(const Duration(days: 7)));
 }
 
-int? _calculateAmountMinor({
+int? calculateTimesheetAmountMinor({
   required int durationSeconds,
   required int? hourlyRateMinor,
 }) {

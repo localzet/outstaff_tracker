@@ -26,6 +26,9 @@ final kimaiApiClientProvider = FutureProvider<KimaiApiClient>((ref) async {
   return KimaiApiClient(
     dio: ref.watch(dioProvider),
     tokenStorage: ref.watch(secureTokenStorageProvider),
-    baseUrl: normalizeKimaiBaseUrl(settings.baseUrl),
+    baseUrl: normalizeKimaiBaseUrl(
+      settings.baseUrl,
+      allowInsecureHttp: settings.allowInsecureKimaiHttp,
+    ),
   );
 });

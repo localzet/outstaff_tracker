@@ -166,14 +166,26 @@ class _AutoUpdateHostState extends ConsumerState<AutoUpdateHost> {
       builder: (context) {
         final nativeUpdatesSupported =
             result.installMode == UpdateInstallMode.native;
+        final asset = result.selectedAsset;
+        final actionLabel = nativeUpdatesSupported
+            ? 'Обновить'
+            : asset == null
+                ? 'Открыть релиз'
+                : result.platformLabel == 'Android'
+                    ? 'Скачать APK'
+                    : 'Скачать установщик';
         return AlertDialog(
           title: const Text('Доступна новая версия'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Текущая версия: ${result.currentVersion}'),
+              Text(
+                'Текущая версия: ${result.currentVersion}+${result.currentBuildNumber}',
+              ),
               Text('Новая версия: ${result.metadata.version}'),
+              Text('Платформа: ${result.platformLabel}'),
+              if (asset != null) Text('Файл: ${asset.name}'),
               const SizedBox(height: 12),
               TextButton.icon(
                 onPressed: () {
@@ -195,20 +207,11 @@ class _AutoUpdateHostState extends ConsumerState<AutoUpdateHost> {
             FilledButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                if (nativeUpdatesSupported) {
-                  ref
-                      .read(updateControllerProvider.notifier)
-                      .installLatestUpdate();
-                } else {
-                  launchUrl(
-                    Uri.parse(result.metadata.releaseNotesUrl),
-                    mode: LaunchMode.externalApplication,
-                  );
-                }
+                ref
+                    .read(updateControllerProvider.notifier)
+                    .installLatestUpdate();
               },
-              child: Text(
-                nativeUpdatesSupported ? 'Обновить' : 'Открыть релиз',
-              ),
+              child: Text(actionLabel),
             ),
           ],
         );

@@ -4,38 +4,55 @@ import 'package:outstaff_tracker/core/network/kimai_url.dart';
 
 void main() {
   group('normalizeKimaiBaseUrl', () {
-    test('appends api to host URL', () {
+    test('prepends https and appends api to host URL', () {
       expect(
-        normalizeKimaiBaseUrl('http://kimai.geryon.space'),
-        'http://kimai.geryon.space/api',
+        normalizeKimaiBaseUrl('kimai.example.com'),
+        'https://kimai.example.com/api',
       );
     });
 
-    test('removes trailing slash before appending api', () {
+    test('converts http to https by default', () {
       expect(
-        normalizeKimaiBaseUrl('http://kimai.geryon.space/'),
-        'http://kimai.geryon.space/api',
+        normalizeKimaiBaseUrl('http://kimai.example.com'),
+        'https://kimai.example.com/api',
+      );
+    });
+
+    test('appends api to https host URL', () {
+      expect(
+        normalizeKimaiBaseUrl('https://kimai.example.com'),
+        'https://kimai.example.com/api',
       );
     });
 
     test('keeps existing api path', () {
       expect(
-        normalizeKimaiBaseUrl('http://kimai.geryon.space/api'),
-        'http://kimai.geryon.space/api',
+        normalizeKimaiBaseUrl('https://kimai.example.com/api'),
+        'https://kimai.example.com/api',
       );
     });
 
     test('normalizes trailing slash after api', () {
       expect(
-        normalizeKimaiBaseUrl('http://kimai.geryon.space/api/'),
-        'http://kimai.geryon.space/api',
+        normalizeKimaiBaseUrl('https://kimai.example.com/api/'),
+        'https://kimai.example.com/api',
       );
     });
 
     test('avoids duplicate api path', () {
       expect(
-        normalizeKimaiBaseUrl(' http://kimai.geryon.space/api/api/ '),
-        'http://kimai.geryon.space/api',
+        normalizeKimaiBaseUrl(' https://kimai.example.com/api/api/ '),
+        'https://kimai.example.com/api',
+      );
+    });
+
+    test('keeps http when insecure mode is explicitly allowed', () {
+      expect(
+        normalizeKimaiBaseUrl(
+          'http://kimai.example.com',
+          allowInsecureHttp: true,
+        ),
+        'http://kimai.example.com/api',
       );
     });
   });

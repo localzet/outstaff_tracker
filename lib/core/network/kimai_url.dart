@@ -1,39 +1,68 @@
-String normalizeKimaiBaseUrl(String input) {
-  final trimmed = input.trim();
-  if (trimmed.isEmpty) {
+String normalizeKimaiBaseUrl(
+  String input, {
+  bool allowInsecureHttp = false,
+}) {
+  var raw = input.trim();
+  if (raw.isEmpty) {
     return '';
   }
 
-  final uri = Uri.parse(trimmed);
-  final normalizedPath = _normalizePath(uri.path);
+  if (!raw.contains(RegExp(r'^[a-zA-Z][a-zA-Z0-9+\-.]*://'))) {
+    raw = 'https://$raw';
+  }
 
-  return uri.replace(path: normalizedPath).removeFragment().toString();
+  var uri = Uri.parse(raw);
+  var scheme = uri.scheme.toLowerCase();
+  if (scheme == 'http' && !allowInsecureHttp) {
+    scheme = 'https';
+  }
+
+  final normalizedPath = _normalizePath(uri.path);
+  uri = uri.replace(
+    scheme: scheme,
+    path: normalizedPath,
+    queryParameters: uri.queryParameters.isEmpty ? null : uri.queryParameters,
+    fragment: null,
+  );
+
+  return uri.toString();
 }
 
-String? validateKimaiHostUrl(String input) {
-  final raw = input.trim();
-  final uri = Uri.tryParse(raw);
-  if (raw.isEmpty ||
+String? validateKimaiHostUrl(
+  String input, {
+  bool allowInsecureHttp = false,
+}) {
+  final normalized = normalizeKimaiBaseUrl(
+    input,
+    allowInsecureHttp: allowInsecureHttp,
+  );
+  final uri = Uri.tryParse(normalized);
+  if (normalized.isEmpty ||
       uri == null ||
       !uri.hasScheme ||
       uri.host.isEmpty ||
       (uri.scheme != 'http' && uri.scheme != 'https')) {
-    return 'Enter a valid Kimai URL.';
+    return 'Введите корректный адрес Kimai.';
+  }
+
+  if (uri.scheme == 'http' && !allowInsecureHttp) {
+    return 'HTTP без шифрования отключён.';
   }
 
   return null;
 }
 
 String _normalizePath(String path) {
-  final cleaned = path.trim().replaceAll(RegExp(r'/+$'), '');
-  if (cleaned.isEmpty || cleaned == '/') {
-    return '/api';
+  final segments = path
+      .split('/')
+      .where((segment) => segment.trim().isNotEmpty)
+      .map((segment) => segment.trim())
+      .toList();
+
+  while (segments.isNotEmpty && segments.last.toLowerCase() == 'api') {
+    segments.removeLast();
   }
 
-  final withoutDuplicateApi = cleaned.replaceFirst(RegExp(r'(/api)+$'), '/api');
-  if (withoutDuplicateApi.endsWith('/api')) {
-    return withoutDuplicateApi;
-  }
-
-  return '$withoutDuplicateApi/api';
+  segments.add('api');
+  return '/${segments.join('/')}';
 }
