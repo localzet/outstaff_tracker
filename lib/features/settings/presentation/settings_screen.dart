@@ -47,6 +47,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _assumePastPayoutsPaid = true;
   bool _autoCheckUpdates = true;
   bool _allowInsecureHttp = false;
+  bool _pmAdminMode = false;
   bool _settingsLoaded = false;
   bool _saving = false;
   ConnectionStatus _connectionStatus = const ConnectionStatus.idle();
@@ -202,6 +203,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
+                      value: _pmAdminMode,
+                      onChanged: (value) {
+                        setState(() => _pmAdminMode = value);
+                      },
+                      title: const Text('Режим PM/Admin'),
+                      subtitle: const Text(
+                        'Доступны отчёты по другим пользователям, если API-ключ имеет права.',
+                      ),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
                       value: _autoCheckUpdates,
                       onChanged: (value) {
                         setState(() => _autoCheckUpdates = value);
@@ -292,6 +304,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _assumePastPayoutsPaid = settings.assumePastPayoutsPaid;
     _autoCheckUpdates = settings.autoCheckUpdates;
     _allowInsecureHttp = settings.allowInsecureKimaiHttp;
+    _pmAdminMode = settings.pmAdminMode;
     _settingsLoaded = true;
   }
 
@@ -322,6 +335,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         includePrereleaseUpdates: currentSettings.includePrereleaseUpdates,
         lastUpdateCheckAt: currentSettings.lastUpdateCheckAt,
         allowInsecureKimaiHttp: _allowInsecureHttp,
+        pmAdminMode: _pmAdminMode,
       );
 
       await ref.read(settingsRepositoryProvider).saveSettings(settings);

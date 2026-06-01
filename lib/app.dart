@@ -16,6 +16,7 @@ import 'features/onboarding/presentation/onboarding_screen.dart';
 import 'features/payments/presentation/payments_screen.dart';
 import 'features/progress/presentation/progress_history_screen.dart';
 import 'features/projects/presentation/projects_screen.dart';
+import 'features/reports/presentation/reports_screen.dart';
 import 'features/settings/data/settings_repository.dart';
 import 'features/settings/presentation/settings_screen.dart';
 import 'features/sync/data/sync_controller.dart';
@@ -78,6 +79,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AnalyticsScreen.routePath,
             builder: (context, state) => const AnalyticsScreen(),
+          ),
+          GoRoute(
+            path: ReportsScreen.routePath,
+            builder: (context, state) => const ReportsScreen(),
           ),
           GoRoute(
             path: SettingsScreen.routePath,
@@ -296,6 +301,11 @@ class AppShell extends StatelessWidget {
       label: 'Аналитика',
       path: AnalyticsScreen.routePath,
       icon: Icons.query_stats_rounded,
+    ),
+    NavigationDestinationData(
+      label: 'Отчёты',
+      path: ReportsScreen.routePath,
+      icon: Icons.table_chart_rounded,
     ),
     NavigationDestinationData(
       label: 'Настройки',

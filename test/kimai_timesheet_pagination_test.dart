@@ -122,6 +122,68 @@ void main() {
       expect(result.entries, hasLength(2));
       expect(calls.map((call) => call['page']), [null, 2]);
     });
+
+    test('includes project and user filters for report requests', () async {
+      final query = buildTimesheetQueryParams(
+        begin: DateTime(2026, 1),
+        end: DateTime(2026, 2),
+        projectId: 42,
+        userId: 7,
+        page: 3,
+      );
+
+      expect(query['project'], 42);
+      expect(query['user'], 7);
+      expect(query['page'], 3);
+    });
+
+    test('parses user, project and money fields from timesheet', () {
+      final page = readTimesheetPage(
+        _response([
+          {
+            'id': 1,
+            'begin': '2026-01-01T09:00:00+0000',
+            'end': '2026-01-01T10:00:00+0000',
+            'duration': 3600,
+            'rate': 1500,
+            'hourlyRate': 1500,
+            'project': {'id': 42, 'name': 'Client project'},
+            'activity': {'id': 5, 'name': 'Development'},
+            'user': {
+              'id': 7,
+              'username': 'pm.user',
+              'alias': 'PM User',
+              'title': 'Project manager',
+            },
+          },
+        ]),
+      );
+
+      final entry = page.entries.single;
+
+      expect(entry.projectId, 42);
+      expect(entry.projectName, 'Client project');
+      expect(entry.userId, 7);
+      expect(entry.userName, 'pm.user');
+      expect(entry.userAlias, 'PM User');
+      expect(entry.userTitle, 'Project manager');
+      expect(entry.activityName, 'Development');
+      expect(entry.rate, 1500);
+      expect(entry.hourlyRate, 1500);
+    });
+  });
+
+  group('KimaiCurrentUserDto', () {
+    test('detects admin reporting capability from roles', () {
+      final user = KimaiCurrentUserDto.fromJson({
+        'id': 1,
+        'username': 'admin',
+        'roles': ['ROLE_USER', 'ROLE_ADMIN'],
+      });
+
+      expect(user.displayName, 'admin');
+      expect(user.hasAdminReportingCapability, isTrue);
+    });
   });
 
   group('buildFullYearSyncRange', () {

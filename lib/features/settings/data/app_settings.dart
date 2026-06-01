@@ -9,6 +9,7 @@ class AppSettings {
     required this.includePrereleaseUpdates,
     required this.lastUpdateCheckAt,
     required this.allowInsecureKimaiHttp,
+    required this.pmAdminMode,
   });
 
   static const defaults = AppSettings(
@@ -21,6 +22,7 @@ class AppSettings {
     includePrereleaseUpdates: false,
     lastUpdateCheckAt: null,
     allowInsecureKimaiHttp: false,
+    pmAdminMode: false,
   );
 
   final String baseUrl;
@@ -32,6 +34,7 @@ class AppSettings {
   final bool includePrereleaseUpdates;
   final DateTime? lastUpdateCheckAt;
   final bool allowInsecureKimaiHttp;
+  final bool pmAdminMode;
 
   AppSettings copyWith({
     String? baseUrl,
@@ -43,6 +46,7 @@ class AppSettings {
     bool? includePrereleaseUpdates,
     DateTime? lastUpdateCheckAt,
     bool? allowInsecureKimaiHttp,
+    bool? pmAdminMode,
   }) {
     return AppSettings(
       baseUrl: baseUrl ?? this.baseUrl,
@@ -58,6 +62,7 @@ class AppSettings {
       lastUpdateCheckAt: lastUpdateCheckAt ?? this.lastUpdateCheckAt,
       allowInsecureKimaiHttp:
           allowInsecureKimaiHttp ?? this.allowInsecureKimaiHttp,
+      pmAdminMode: pmAdminMode ?? this.pmAdminMode,
     );
   }
 }

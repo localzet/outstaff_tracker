@@ -19,6 +19,7 @@ class SettingsRepository {
       'settings.updates.include_prerelease';
   static const lastUpdateCheckAtKey = 'settings.updates.last_checked_at';
   static const allowInsecureKimaiHttpKey = 'settings.kimai.allow_insecure_http';
+  static const pmAdminModeKey = 'settings.app_mode.pm_admin';
 
   final AppDatabase _database;
 
@@ -51,6 +52,8 @@ class SettingsRepository {
       allowInsecureKimaiHttp:
           bool.tryParse(values[allowInsecureKimaiHttpKey] ?? '') ??
               AppSettings.defaults.allowInsecureKimaiHttp,
+      pmAdminMode: bool.tryParse(values[pmAdminModeKey] ?? '') ??
+          AppSettings.defaults.pmAdminMode,
     );
   }
 
@@ -79,6 +82,7 @@ class SettingsRepository {
         allowInsecureKimaiHttpKey,
         settings.allowInsecureKimaiHttp.toString(),
       );
+      await _upsertValue(pmAdminModeKey, settings.pmAdminMode.toString());
       final lastUpdateCheckAt = settings.lastUpdateCheckAt;
       if (lastUpdateCheckAt != null) {
         await _upsertValue(
@@ -118,6 +122,7 @@ class SettingsRepository {
       includePrereleaseUpdatesKey,
       lastUpdateCheckAtKey,
       allowInsecureKimaiHttpKey,
+      pmAdminModeKey,
     };
 
     return {
@@ -138,6 +143,7 @@ class SettingsRepository {
       includePrereleaseUpdatesKey,
       lastUpdateCheckAtKey,
       allowInsecureKimaiHttpKey,
+      pmAdminModeKey,
     };
     await _database.transaction(() async {
       for (final entry in values.entries) {

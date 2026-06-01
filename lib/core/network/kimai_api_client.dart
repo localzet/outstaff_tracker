@@ -44,6 +44,28 @@ class KimaiApiClient {
         .toList(growable: false);
   }
 
+  Future<KimaiCurrentUserDto> fetchCurrentUser() async {
+    final response = await _request<Map<String, Object?>>(
+      path: 'users/me',
+      method: 'GET',
+    );
+
+    return KimaiCurrentUserDto.fromJson(response.data ?? const {});
+  }
+
+  Future<List<KimaiUserDto>> fetchUsers() async {
+    final response = await _request<Object?>(
+      path: 'users',
+      method: 'GET',
+      queryParameters: const {'visible': 3},
+    );
+
+    return _readResponseList(response.data)
+        .whereType<Map<String, Object?>>()
+        .map(KimaiUserDto.fromJson)
+        .toList(growable: false);
+  }
+
   Future<List<KimaiTimesheetDto>> fetchTimesheets(
     DateTime begin,
     DateTime end, {
@@ -67,6 +89,25 @@ class KimaiApiClient {
       begin: begin,
       end: end,
       projectId: projectId,
+      requestPage: (queryParameters) => _request<Object?>(
+        path: 'timesheets',
+        method: 'GET',
+        queryParameters: queryParameters,
+      ),
+    );
+  }
+
+  Future<KimaiTimesheetFetchResult> fetchTimesheetsForReport({
+    required int projectId,
+    required DateTime begin,
+    required DateTime end,
+    int? userId,
+  }) {
+    return fetchKimaiTimesheetPages(
+      begin: begin,
+      end: end,
+      projectId: projectId,
+      userId: userId,
       requestPage: (queryParameters) => _request<Object?>(
         path: 'timesheets',
         method: 'GET',
@@ -141,6 +182,7 @@ Future<KimaiTimesheetFetchResult> fetchKimaiTimesheetPages({
   required DateTime end,
   required KimaiTimesheetPageRequester requestPage,
   int? projectId,
+  int? userId,
 }) async {
   final entries = <KimaiTimesheetDto>[];
   final requests = <KimaiTimesheetRequestSummary>[];
@@ -151,6 +193,7 @@ Future<KimaiTimesheetFetchResult> fetchKimaiTimesheetPages({
       begin: begin,
       end: end,
       projectId: projectId,
+      userId: userId,
       page: page,
     );
     final response = await requestPage(queryParameters);
@@ -235,6 +278,7 @@ Map<String, Object> buildTimesheetQueryParams({
   required DateTime begin,
   required DateTime end,
   int? projectId,
+  int? userId,
   int? page,
 }) {
   return {
@@ -243,6 +287,7 @@ Map<String, Object> buildTimesheetQueryParams({
     'end': formatKimaiDateTime(end),
     // TODO: Confirm project filter name for the target Kimai version.
     if (projectId != null) 'project': projectId,
+    if (userId != null) 'user': userId,
     if (page != null) 'page': page,
   };
 }
@@ -586,16 +631,82 @@ class KimaiProjectDto {
   }
 }
 
+class KimaiCurrentUserDto {
+  const KimaiCurrentUserDto({
+    required this.id,
+    required this.username,
+    required this.displayName,
+    required this.roles,
+  });
+
+  final int id;
+  final String username;
+  final String displayName;
+  final List<String> roles;
+
+  bool get hasAdminReportingCapability {
+    return roles.any(
+      (role) =>
+          role == 'ROLE_ADMIN' ||
+          role == 'ROLE_SUPER_ADMIN' ||
+          role == 'ROLE_TEAMLEAD' ||
+          role == 'view_all_data',
+    );
+  }
+
+  factory KimaiCurrentUserDto.fromJson(Map<String, Object?> json) {
+    return KimaiCurrentUserDto(
+      id: _readInt(json['id']),
+      username: _readString(json['username']) ?? '',
+      displayName: _readDisplayName(json),
+      roles: _readStringList(json['roles']),
+    );
+  }
+}
+
+class KimaiUserDto {
+  const KimaiUserDto({
+    required this.id,
+    required this.userName,
+    this.alias,
+    this.title,
+  });
+
+  final int id;
+  final String userName;
+  final String? alias;
+  final String? title;
+
+  String get displayName => alias ?? title ?? userName;
+
+  factory KimaiUserDto.fromJson(Map<String, Object?> json) {
+    return KimaiUserDto(
+      id: _readInt(json['id']),
+      userName: _readString(json['username']) ??
+          _readString(json['name']) ??
+          'User ${_readInt(json['id'])}',
+      alias: _readString(json['alias']),
+      title: _readString(json['title']),
+    );
+  }
+}
+
 class KimaiTimesheetDto {
   const KimaiTimesheetDto({
     required this.id,
     required this.beginAt,
     required this.durationSeconds,
     this.projectId,
+    this.projectName,
+    this.userId,
+    this.userName,
+    this.userAlias,
+    this.userTitle,
     this.activityName,
     this.description,
     this.endAt,
     this.rate,
+    this.hourlyRate,
     this.currency,
     this.exported = false,
     this.tags,
@@ -604,12 +715,18 @@ class KimaiTimesheetDto {
 
   final int id;
   final int? projectId;
+  final String? projectName;
+  final int? userId;
+  final String? userName;
+  final String? userAlias;
+  final String? userTitle;
   final String? activityName;
   final String? description;
   final DateTime beginAt;
   final DateTime? endAt;
   final int durationSeconds;
   final double? rate;
+  final double? hourlyRate;
   final String? currency;
   final bool exported;
   final String? tags;
@@ -618,12 +735,26 @@ class KimaiTimesheetDto {
   factory KimaiTimesheetDto.fromJson(Map<String, Object?> json) {
     final project = json['project'];
     final activity = json['activity'];
+    final user = json['user'];
 
     return KimaiTimesheetDto(
       id: _readInt(json['id']),
       projectId: project is Map<String, Object?>
           ? _readNullableInt(project['id'])
           : _readNullableInt(json['project']),
+      projectName: project is Map<String, Object?>
+          ? _readString(project['name'])
+          : _readString(json['projectName']),
+      userId: user is Map<String, Object?>
+          ? _readNullableInt(user['id'])
+          : _readNullableInt(json['user']),
+      userName: user is Map<String, Object?>
+          ? _readString(user['username']) ?? _readString(user['name'])
+          : _readString(json['userName']) ?? _readString(json['username']),
+      userAlias:
+          user is Map<String, Object?> ? _readString(user['alias']) : null,
+      userTitle:
+          user is Map<String, Object?> ? _readString(user['title']) : null,
       activityName: activity is Map<String, Object?>
           ? _readString(activity['name'])
           : _readString(json['activityName']),
@@ -633,6 +764,7 @@ class KimaiTimesheetDto {
       endAt: _readDateTime(json['end']),
       durationSeconds: _readInt(json['duration'], fallback: 0),
       rate: _readDouble(json['rate']),
+      hourlyRate: _readDouble(json['hourlyRate']),
       currency: _readString(json['currency']),
       exported: _readBool(json['exported']),
       tags: _readTags(json['tags']),
@@ -680,6 +812,22 @@ String? _readString(Object? value) {
   }
 
   return null;
+}
+
+String _readDisplayName(Map<String, Object?> json) {
+  return _readString(json['alias']) ??
+      _readString(json['title']) ??
+      _readString(json['username']) ??
+      _readString(json['name']) ??
+      'User ${_readInt(json['id'])}';
+}
+
+List<String> _readStringList(Object? value) {
+  if (value is List) {
+    return value.whereType<String>().toList(growable: false);
+  }
+
+  return const [];
 }
 
 bool _readBool(Object? value, {bool fallback = false}) {
