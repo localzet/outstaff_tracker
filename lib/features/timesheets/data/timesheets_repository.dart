@@ -379,6 +379,9 @@ class TimesheetsRepository {
   }
 
   Future<List<String>> getAvailableTags() async {
+    final tagRows = await (_database.selectOnly(_database.kimaiTags)
+          ..addColumns([_database.kimaiTags.name]))
+        .get();
     final remoteRows = await (_database.selectOnly(_database.timesheets)
           ..addColumns([_database.timesheets.tags]))
         .get();
@@ -387,6 +390,12 @@ class TimesheetsRepository {
         .get();
     final values = <String>{};
 
+    for (final row in tagRows) {
+      final name = row.read(_database.kimaiTags.name);
+      if (name != null && name.trim().isNotEmpty) {
+        values.add(name.trim());
+      }
+    }
     for (final row in remoteRows) {
       values.addAll(parseTags(row.read(_database.timesheets.tags)));
     }
@@ -595,6 +604,56 @@ class TimesheetsRepository {
               exported: Value(item.exported),
               tags: Value(item.tags),
               kimaiUpdatedAt: Value(item.updatedAt),
+              syncedAt: Value(now),
+            ),
+        ],
+      );
+    });
+  }
+
+  Future<int> reconcileRemoteDeletions({
+    required int kimaiProjectId,
+    required DateTime begin,
+    required DateTime end,
+    required Set<int> remoteTimesheetIds,
+  }) async {
+    final localRows = await (_database.select(_database.timesheets)
+          ..where((table) => table.kimaiProjectId.equals(kimaiProjectId))
+          ..where((table) => table.beginAt.isBiggerOrEqualValue(begin))
+          ..where((table) => table.beginAt.isSmallerOrEqualValue(end)))
+        .get();
+    final idsToDelete = [
+      for (final row in localRows)
+        if (!remoteTimesheetIds.contains(row.id)) row.id,
+    ];
+    if (idsToDelete.isEmpty) {
+      return 0;
+    }
+
+    return (_database.delete(_database.timesheets)
+          ..where((table) => table.id.isIn(idsToDelete)))
+        .go();
+  }
+
+  Future<void> upsertKimaiTags(List<KimaiTagDto> tags) async {
+    final now = DateTime.now().toUtc();
+    final normalized = <String, KimaiTagDto>{};
+    for (final tag in tags) {
+      final name = tag.name.trim();
+      if (name.isNotEmpty) {
+        normalized[tag.id.trim().isEmpty ? name : tag.id.trim()] = tag;
+      }
+    }
+
+    await _database.batch((batch) {
+      batch.insertAllOnConflictUpdate(
+        _database.kimaiTags,
+        [
+          for (final entry in normalized.entries)
+            KimaiTagsCompanion(
+              id: Value(entry.key),
+              name: Value(entry.value.name.trim()),
+              color: Value(entry.value.color),
               syncedAt: Value(now),
             ),
         ],
@@ -903,10 +962,25 @@ class TimesheetsRepository {
               LocalTimeEntryStatus.running.storageValue,
             ) |
             _database.localTimeEntries.status.equals(
+              LocalTimeEntryStatus.syncingStart.storageValue,
+            ) |
+            _database.localTimeEntries.status.equals(
+              LocalTimeEntryStatus.runningSynced.storageValue,
+            ) |
+            _database.localTimeEntries.status.equals(
+              LocalTimeEntryStatus.runningLocal.storageValue,
+            ) |
+            _database.localTimeEntries.status.equals(
               LocalTimeEntryStatus.syncPending.storageValue,
             ) |
             _database.localTimeEntries.status.equals(
               LocalTimeEntryStatus.syncFailed.storageValue,
+            ) |
+            _database.localTimeEntries.status.equals(
+              LocalTimeEntryStatus.stopFailed.storageValue,
+            ) |
+            _database.localTimeEntries.status.equals(
+              LocalTimeEntryStatus.editFailed.storageValue,
             ) |
             _database.localTimeEntries.status.equals(
               LocalTimeEntryStatus.conflict.storageValue,

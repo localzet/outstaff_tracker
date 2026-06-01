@@ -156,6 +156,84 @@ void main() {
     expect(fakeClient.createCalls, 1);
   });
 
+  test('online timer start creates Kimai entry and stores id', () async {
+    final fakeClient = _FakeKimaiClient(
+      createdTimesheet: KimaiTimesheetDto(
+        id: 501,
+        projectId: 1,
+        beginAt: DateTime.utc(2026, 6, 1, 9),
+        durationSeconds: 0,
+      ),
+      startedTimesheet: KimaiTimesheetDto(
+        id: 701,
+        projectId: 1,
+        beginAt: DateTime.utc(2026, 6, 1, 9),
+        durationSeconds: 0,
+      ),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(database),
+        kimaiApiClientProvider.overrideWith((ref) async => fakeClient),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final entry =
+        await container.read(localTrackingSyncServiceProvider).startTimer(
+              appProjectId: 'kimai_1',
+              kimaiProjectId: 1,
+              beginAt: DateTime.utc(2026, 6, 1, 9),
+            );
+
+    expect(entry.status, LocalTimeEntryStatus.runningSynced.storageValue);
+    expect(entry.kimaiTimesheetId, 701);
+    expect(fakeClient.startCalls, 1);
+  });
+
+  test('stop synced timer updates Kimai and local status', () async {
+    final fakeClient = _FakeKimaiClient(
+      createdTimesheet: KimaiTimesheetDto(
+        id: 501,
+        projectId: 1,
+        beginAt: DateTime.utc(2026, 6, 1, 9),
+        durationSeconds: 0,
+      ),
+      stoppedTimesheet: KimaiTimesheetDto(
+        id: 701,
+        projectId: 1,
+        beginAt: DateTime.utc(2026, 6, 1, 9),
+        endAt: DateTime.utc(2026, 6, 1, 10),
+        durationSeconds: 3600,
+      ),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(database),
+        kimaiApiClientProvider.overrideWith((ref) async => fakeClient),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final local = await repository.startTimer(
+      appProjectId: 'kimai_1',
+      kimaiProjectId: 1,
+      beginAt: DateTime.utc(2026, 6, 1, 9),
+      now: DateTime.utc(2026, 6, 1, 9),
+      status: LocalTimeEntryStatus.runningSynced,
+    );
+    await repository.markRunningSynced(id: local.id, kimaiTimesheetId: 701);
+
+    final stopped =
+        await container.read(localTrackingSyncServiceProvider).stopTimer(
+              endAt: DateTime.utc(2026, 6, 1, 10),
+            );
+
+    expect(stopped.status, LocalTimeEntryStatus.synced.storageValue);
+    expect(stopped.durationSeconds, 3600);
+    expect(fakeClient.stopCalls, 1);
+  });
+
   test('sync sends description exactly without local metadata', () async {
     final fakeClient = _FakeKimaiClient(
       createdTimesheet: KimaiTimesheetDto(
@@ -296,10 +374,19 @@ void main() {
 }
 
 class _FakeKimaiClient implements KimaiApiClient {
-  _FakeKimaiClient({required this.createdTimesheet});
+  _FakeKimaiClient({
+    required this.createdTimesheet,
+    KimaiTimesheetDto? startedTimesheet,
+    KimaiTimesheetDto? stoppedTimesheet,
+  })  : startedTimesheet = startedTimesheet ?? createdTimesheet,
+        stoppedTimesheet = stoppedTimesheet ?? createdTimesheet;
 
   final KimaiTimesheetDto createdTimesheet;
+  final KimaiTimesheetDto startedTimesheet;
+  final KimaiTimesheetDto stoppedTimesheet;
   int createCalls = 0;
+  int startCalls = 0;
+  int stopCalls = 0;
   String? lastDescription;
   String? lastTags;
 
@@ -316,6 +403,29 @@ class _FakeKimaiClient implements KimaiApiClient {
     lastDescription = description;
     lastTags = tags;
     return createdTimesheet;
+  }
+
+  @override
+  Future<KimaiTimesheetDto> startTimesheet({
+    required int projectId,
+    required DateTime beginAt,
+    required String description,
+    int? activityId,
+    String? tags,
+  }) async {
+    startCalls++;
+    lastDescription = description;
+    lastTags = tags;
+    return startedTimesheet;
+  }
+
+  @override
+  Future<KimaiTimesheetDto> stopTimesheet({
+    required int kimaiTimesheetId,
+    required DateTime endAt,
+  }) async {
+    stopCalls++;
+    return stoppedTimesheet;
   }
 
   @override

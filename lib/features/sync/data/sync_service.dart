@@ -29,12 +29,14 @@ enum TimesheetSyncMode {
 class TimesheetSyncResult {
   const TimesheetSyncResult({
     required this.importedEntries,
+    required this.reconciledRemovals,
     required this.enabledProjects,
     required this.failedProjects,
     required this.debugReport,
   });
 
   final int importedEntries;
+  final int reconciledRemovals;
   final int enabledProjects;
   final List<String> failedProjects;
   final String debugReport;
@@ -120,9 +122,11 @@ class SyncService {
       final client = await _ref.read(kimaiApiClientProvider.future);
       await _syncActivities(database, client);
       final timesheetsRepository = _ref.read(timesheetsRepositoryProvider);
+      await _syncTags(client, timesheetsRepository);
       final firstBegin = ranges.first.begin;
       final finalEnd = ranges.last.end;
       var importedEntries = 0;
+      var reconciledRemovals = 0;
       var remoteEntriesFetched = 0;
       final failures = <String>[];
       final projectReports = <String>[];
@@ -165,8 +169,15 @@ class SyncService {
             projectEntries,
             enabledProjects,
           );
+          final removed = await timesheetsRepository.reconcileRemoteDeletions(
+            kimaiProjectId: kimaiProjectId,
+            begin: firstBegin,
+            end: finalEnd,
+            remoteTimesheetIds: projectEntriesById.keys.toSet(),
+          );
           remoteEntriesFetched += projectEntries.length;
           importedEntries += projectEntries.length;
+          reconciledRemovals += removed;
           projectReports.add(
             _formatProjectReport(
               projectName: project.name,
@@ -175,6 +186,7 @@ class SyncService {
               end: finalEnd,
               status: 'success',
               entriesReceived: projectEntries.length,
+              reconciledRemovals: removed,
               requests: projectRequests,
             ),
           );
@@ -194,6 +206,7 @@ class SyncService {
               end: finalEnd,
               status: 'failed',
               entriesReceived: 0,
+              reconciledRemovals: 0,
               requests: const [],
               error: failure,
             ),
@@ -203,7 +216,6 @@ class SyncService {
         }
       }
 
-      // TODO: Add reconciliation for remote deletions after confirming Kimai deletion semantics.
       final finishedAt = DateTime.now().toUtc();
       final status = failures.isEmpty ? 'success' : 'partial';
       final debugReport = _formatSyncDebugReport(
@@ -213,6 +225,7 @@ class SyncService {
         enabledProjects: enabledProjects.length,
         remoteEntriesFetched: remoteEntriesFetched,
         localUpserts: importedEntries,
+        reconciledRemovals: reconciledRemovals,
         failedProjects: failures.length,
         projectReports: projectReports,
       );
@@ -223,7 +236,7 @@ class SyncService {
           SyncLogsCompanion(
             status: Value(status),
             message: Value(
-              'Projects: ${enabledProjects.length}; fetched: $remoteEntriesFetched; upserts: $importedEntries; failed: ${failures.length}',
+              'Projects: ${enabledProjects.length}; fetched: $remoteEntriesFetched; upserts: $importedEntries; reconciled removals: $reconciledRemovals; failed: ${failures.length}',
             ),
             error:
                 Value(failures.isEmpty ? null : failures.join('\n\n---\n\n')),
@@ -243,6 +256,7 @@ class SyncService {
 
       return TimesheetSyncResult(
         importedEntries: importedEntries,
+        reconciledRemovals: reconciledRemovals,
         enabledProjects: enabledProjects.length,
         failedProjects: failures,
         debugReport: debugReport,
@@ -287,6 +301,21 @@ class SyncService {
         ],
       );
     });
+  }
+
+  Future<void> _syncTags(
+    KimaiApiClient client,
+    TimesheetsRepository timesheetsRepository,
+  ) async {
+    try {
+      final tags = await client.fetchTags();
+      await timesheetsRepository.upsertKimaiTags(tags);
+    } on KimaiApiException catch (error) {
+      final statusCode = error.details.statusCode;
+      if (statusCode != 404 && statusCode != 405) {
+        rethrow;
+      }
+    }
   }
 
   static List<KimaiSyncRange> _splitByMonth(KimaiSyncRange range) {
@@ -358,6 +387,7 @@ class SyncService {
     required int enabledProjects,
     required int remoteEntriesFetched,
     required int localUpserts,
+    required int reconciledRemovals,
     required int failedProjects,
     required List<String> projectReports,
   }) {
@@ -368,6 +398,7 @@ class SyncService {
       'enabled_projects=$enabledProjects',
       'total_remote_entries_fetched=$remoteEntriesFetched',
       'total_local_upserts=$localUpserts',
+      'total_reconciled_removals=$reconciledRemovals',
       'failed_projects=$failedProjects',
       for (final report in projectReports) ...[
         'project_sync_start',
@@ -384,6 +415,7 @@ class SyncService {
     required DateTime end,
     required String status,
     required int entriesReceived,
+    required int reconciledRemovals,
     required List<KimaiTimesheetRequestSummary> requests,
     String? error,
   }) {
@@ -395,6 +427,7 @@ class SyncService {
       'status=$status',
       'pages_requested=${requests.length}',
       'entries_received=$entriesReceived',
+      'reconciled_removals=$reconciledRemovals',
       for (final request in requests) ...[
         'request_start',
         request.toDiagnosticString(),

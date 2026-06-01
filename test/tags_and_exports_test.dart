@@ -165,7 +165,15 @@ class _FakeKimaiClient implements KimaiApiClient {
   }
 
   @override
+  Future<void> deleteTimesheet(int kimaiTimesheetId) async {}
+
+  @override
   Future<List<KimaiActivityDto>> fetchActivities({int? projectId}) async {
+    return const [];
+  }
+
+  @override
+  Future<List<KimaiTagDto>> fetchTags() async {
     return const [];
   }
 
@@ -221,5 +229,37 @@ class _FakeKimaiClient implements KimaiApiClient {
   @override
   Future<List<KimaiUserDto>> fetchUsers() async {
     return const [];
+  }
+
+  @override
+  Future<KimaiTimesheetDto> startTimesheet({
+    required int projectId,
+    required DateTime beginAt,
+    required String description,
+    int? activityId,
+    String? tags,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<KimaiTimesheetDto> stopTimesheet({
+    required int kimaiTimesheetId,
+    required DateTime endAt,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<KimaiTimesheetDto> updateTimesheet({
+    required int kimaiTimesheetId,
+    required int projectId,
+    required DateTime beginAt,
+    required DateTime endAt,
+    required String description,
+    int? activityId,
+    String? tags,
+  }) {
+    throw UnimplementedError();
   }
 }

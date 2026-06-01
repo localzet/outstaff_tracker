@@ -1393,6 +1393,275 @@ class KimaiActivitiesCompanion extends UpdateCompanion<KimaiActivity> {
   }
 }
 
+class $KimaiTagsTable extends KimaiTags
+    with TableInfo<$KimaiTagsTable, KimaiTag> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $KimaiTagsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+      'id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+      'name', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _colorMeta = const VerificationMeta('color');
+  @override
+  late final GeneratedColumn<String> color = GeneratedColumn<String>(
+      'color', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _syncedAtMeta =
+      const VerificationMeta('syncedAt');
+  @override
+  late final GeneratedColumn<DateTime> syncedAt = GeneratedColumn<DateTime>(
+      'synced_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [id, name, color, syncedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'kimai_tags';
+  @override
+  VerificationContext validateIntegrity(Insertable<KimaiTag> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+          _nameMeta, name.isAcceptableOrUnknown(data['name']!, _nameMeta));
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('color')) {
+      context.handle(
+          _colorMeta, color.isAcceptableOrUnknown(data['color']!, _colorMeta));
+    }
+    if (data.containsKey('synced_at')) {
+      context.handle(_syncedAtMeta,
+          syncedAt.isAcceptableOrUnknown(data['synced_at']!, _syncedAtMeta));
+    } else if (isInserting) {
+      context.missing(_syncedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  KimaiTag map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return KimaiTag(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}id'])!,
+      name: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}name'])!,
+      color: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}color']),
+      syncedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}synced_at'])!,
+    );
+  }
+
+  @override
+  $KimaiTagsTable createAlias(String alias) {
+    return $KimaiTagsTable(attachedDatabase, alias);
+  }
+}
+
+class KimaiTag extends DataClass implements Insertable<KimaiTag> {
+  final String id;
+  final String name;
+  final String? color;
+  final DateTime syncedAt;
+  const KimaiTag(
+      {required this.id,
+      required this.name,
+      this.color,
+      required this.syncedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    if (!nullToAbsent || color != null) {
+      map['color'] = Variable<String>(color);
+    }
+    map['synced_at'] = Variable<DateTime>(syncedAt);
+    return map;
+  }
+
+  KimaiTagsCompanion toCompanion(bool nullToAbsent) {
+    return KimaiTagsCompanion(
+      id: Value(id),
+      name: Value(name),
+      color:
+          color == null && nullToAbsent ? const Value.absent() : Value(color),
+      syncedAt: Value(syncedAt),
+    );
+  }
+
+  factory KimaiTag.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return KimaiTag(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      color: serializer.fromJson<String?>(json['color']),
+      syncedAt: serializer.fromJson<DateTime>(json['syncedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'color': serializer.toJson<String?>(color),
+      'syncedAt': serializer.toJson<DateTime>(syncedAt),
+    };
+  }
+
+  KimaiTag copyWith(
+          {String? id,
+          String? name,
+          Value<String?> color = const Value.absent(),
+          DateTime? syncedAt}) =>
+      KimaiTag(
+        id: id ?? this.id,
+        name: name ?? this.name,
+        color: color.present ? color.value : this.color,
+        syncedAt: syncedAt ?? this.syncedAt,
+      );
+  KimaiTag copyWithCompanion(KimaiTagsCompanion data) {
+    return KimaiTag(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      color: data.color.present ? data.color.value : this.color,
+      syncedAt: data.syncedAt.present ? data.syncedAt.value : this.syncedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('KimaiTag(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('color: $color, ')
+          ..write('syncedAt: $syncedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, name, color, syncedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is KimaiTag &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.color == this.color &&
+          other.syncedAt == this.syncedAt);
+}
+
+class KimaiTagsCompanion extends UpdateCompanion<KimaiTag> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<String?> color;
+  final Value<DateTime> syncedAt;
+  final Value<int> rowid;
+  const KimaiTagsCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.color = const Value.absent(),
+    this.syncedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  KimaiTagsCompanion.insert({
+    required String id,
+    required String name,
+    this.color = const Value.absent(),
+    required DateTime syncedAt,
+    this.rowid = const Value.absent(),
+  })  : id = Value(id),
+        name = Value(name),
+        syncedAt = Value(syncedAt);
+  static Insertable<KimaiTag> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<String>? color,
+    Expression<DateTime>? syncedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (color != null) 'color': color,
+      if (syncedAt != null) 'synced_at': syncedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  KimaiTagsCompanion copyWith(
+      {Value<String>? id,
+      Value<String>? name,
+      Value<String?>? color,
+      Value<DateTime>? syncedAt,
+      Value<int>? rowid}) {
+    return KimaiTagsCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      color: color ?? this.color,
+      syncedAt: syncedAt ?? this.syncedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (color.present) {
+      map['color'] = Variable<String>(color.value);
+    }
+    if (syncedAt.present) {
+      map['synced_at'] = Variable<DateTime>(syncedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('KimaiTagsCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('color: $color, ')
+          ..write('syncedAt: $syncedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $AppProjectsTable extends AppProjects
     with TableInfo<$AppProjectsTable, AppProject> {
   @override
@@ -5461,6 +5730,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $KimaiProjectsTable kimaiProjects = $KimaiProjectsTable(this);
   late final $KimaiActivitiesTable kimaiActivities =
       $KimaiActivitiesTable(this);
+  late final $KimaiTagsTable kimaiTags = $KimaiTagsTable(this);
   late final $AppProjectsTable appProjects = $AppProjectsTable(this);
   late final $PayoutDatesTable payoutDates = $PayoutDatesTable(this);
   late final $ProjectRateHistoryTable projectRateHistory =
@@ -5479,6 +5749,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         syncState,
         kimaiProjects,
         kimaiActivities,
+        kimaiTags,
         appProjects,
         payoutDates,
         projectRateHistory,
@@ -6540,6 +6811,156 @@ typedef $$KimaiActivitiesTableProcessedTableManager = ProcessedTableManager<
       BaseReferences<_$AppDatabase, $KimaiActivitiesTable, KimaiActivity>
     ),
     KimaiActivity,
+    PrefetchHooks Function()>;
+typedef $$KimaiTagsTableCreateCompanionBuilder = KimaiTagsCompanion Function({
+  required String id,
+  required String name,
+  Value<String?> color,
+  required DateTime syncedAt,
+  Value<int> rowid,
+});
+typedef $$KimaiTagsTableUpdateCompanionBuilder = KimaiTagsCompanion Function({
+  Value<String> id,
+  Value<String> name,
+  Value<String?> color,
+  Value<DateTime> syncedAt,
+  Value<int> rowid,
+});
+
+class $$KimaiTagsTableFilterComposer
+    extends Composer<_$AppDatabase, $KimaiTagsTable> {
+  $$KimaiTagsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get name => $composableBuilder(
+      column: $table.name, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get color => $composableBuilder(
+      column: $table.color, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get syncedAt => $composableBuilder(
+      column: $table.syncedAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$KimaiTagsTableOrderingComposer
+    extends Composer<_$AppDatabase, $KimaiTagsTable> {
+  $$KimaiTagsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get name => $composableBuilder(
+      column: $table.name, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get color => $composableBuilder(
+      column: $table.color, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get syncedAt => $composableBuilder(
+      column: $table.syncedAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$KimaiTagsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $KimaiTagsTable> {
+  $$KimaiTagsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get color =>
+      $composableBuilder(column: $table.color, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get syncedAt =>
+      $composableBuilder(column: $table.syncedAt, builder: (column) => column);
+}
+
+class $$KimaiTagsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $KimaiTagsTable,
+    KimaiTag,
+    $$KimaiTagsTableFilterComposer,
+    $$KimaiTagsTableOrderingComposer,
+    $$KimaiTagsTableAnnotationComposer,
+    $$KimaiTagsTableCreateCompanionBuilder,
+    $$KimaiTagsTableUpdateCompanionBuilder,
+    (KimaiTag, BaseReferences<_$AppDatabase, $KimaiTagsTable, KimaiTag>),
+    KimaiTag,
+    PrefetchHooks Function()> {
+  $$KimaiTagsTableTableManager(_$AppDatabase db, $KimaiTagsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$KimaiTagsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$KimaiTagsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$KimaiTagsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> id = const Value.absent(),
+            Value<String> name = const Value.absent(),
+            Value<String?> color = const Value.absent(),
+            Value<DateTime> syncedAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              KimaiTagsCompanion(
+            id: id,
+            name: name,
+            color: color,
+            syncedAt: syncedAt,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String id,
+            required String name,
+            Value<String?> color = const Value.absent(),
+            required DateTime syncedAt,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              KimaiTagsCompanion.insert(
+            id: id,
+            name: name,
+            color: color,
+            syncedAt: syncedAt,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$KimaiTagsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $KimaiTagsTable,
+    KimaiTag,
+    $$KimaiTagsTableFilterComposer,
+    $$KimaiTagsTableOrderingComposer,
+    $$KimaiTagsTableAnnotationComposer,
+    $$KimaiTagsTableCreateCompanionBuilder,
+    $$KimaiTagsTableUpdateCompanionBuilder,
+    (KimaiTag, BaseReferences<_$AppDatabase, $KimaiTagsTable, KimaiTag>),
+    KimaiTag,
     PrefetchHooks Function()>;
 typedef $$AppProjectsTableCreateCompanionBuilder = AppProjectsCompanion
     Function({
@@ -9513,6 +9934,8 @@ class $AppDatabaseManager {
       $$KimaiProjectsTableTableManager(_db, _db.kimaiProjects);
   $$KimaiActivitiesTableTableManager get kimaiActivities =>
       $$KimaiActivitiesTableTableManager(_db, _db.kimaiActivities);
+  $$KimaiTagsTableTableManager get kimaiTags =>
+      $$KimaiTagsTableTableManager(_db, _db.kimaiTags);
   $$AppProjectsTableTableManager get appProjects =>
       $$AppProjectsTableTableManager(_db, _db.appProjects);
   $$PayoutDatesTableTableManager get payoutDates =>

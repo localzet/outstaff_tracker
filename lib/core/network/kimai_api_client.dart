@@ -62,6 +62,35 @@ class KimaiApiClient {
         .toList(growable: false);
   }
 
+  Future<List<KimaiTagDto>> fetchTags() async {
+    try {
+      final response = await _request<Object?>(
+        path: 'tags/find',
+        method: 'GET',
+      );
+
+      return _readResponseList(response.data)
+          .map(KimaiTagDto.fromJson)
+          .where((tag) => tag.name.isNotEmpty)
+          .toList(growable: false);
+    } on KimaiApiException catch (error) {
+      final statusCode = error.details.statusCode;
+      if (statusCode != 404 && statusCode != 405) {
+        rethrow;
+      }
+    }
+
+    final response = await _request<Object?>(
+      path: 'tags',
+      method: 'GET',
+    );
+
+    return _readResponseList(response.data)
+        .map(KimaiTagDto.fromJson)
+        .where((tag) => tag.name.isNotEmpty)
+        .toList(growable: false);
+  }
+
   Future<KimaiCurrentUserDto> fetchCurrentUser() async {
     final response = await _request<Map<String, Object?>>(
       path: 'users/me',
@@ -158,6 +187,73 @@ class KimaiApiClient {
     return KimaiTimesheetDto.fromJson(response.data ?? const {});
   }
 
+  Future<KimaiTimesheetDto> startTimesheet({
+    required int projectId,
+    required DateTime beginAt,
+    required String description,
+    int? activityId,
+    String? tags,
+  }) async {
+    final response = await _request<Map<String, Object?>>(
+      path: 'timesheets',
+      method: 'POST',
+      data: _timesheetPayload(
+        projectId: projectId,
+        activityId: activityId,
+        beginAt: beginAt,
+        description: description,
+        tags: tags,
+      ),
+    );
+
+    return KimaiTimesheetDto.fromJson(response.data ?? const {});
+  }
+
+  Future<KimaiTimesheetDto> stopTimesheet({
+    required int kimaiTimesheetId,
+    required DateTime endAt,
+  }) async {
+    final response = await _request<Map<String, Object?>>(
+      path: 'timesheets/$kimaiTimesheetId/stop',
+      method: 'PATCH',
+      data: {'end': formatKimaiDateTime(endAt)},
+    );
+
+    return KimaiTimesheetDto.fromJson(response.data ?? const {});
+  }
+
+  Future<KimaiTimesheetDto> updateTimesheet({
+    required int kimaiTimesheetId,
+    required int projectId,
+    required DateTime beginAt,
+    required DateTime endAt,
+    required String description,
+    int? activityId,
+    String? tags,
+  }) async {
+    final response = await _request<Map<String, Object?>>(
+      path: 'timesheets/$kimaiTimesheetId',
+      method: 'PATCH',
+      data: _timesheetPayload(
+        projectId: projectId,
+        activityId: activityId,
+        beginAt: beginAt,
+        endAt: endAt,
+        description: description,
+        tags: tags,
+      ),
+    );
+
+    return KimaiTimesheetDto.fromJson(response.data ?? const {});
+  }
+
+  Future<void> deleteTimesheet(int kimaiTimesheetId) async {
+    await _request<Object?>(
+      path: 'timesheets/$kimaiTimesheetId',
+      method: 'DELETE',
+    );
+  }
+
   Future<Response<T>> _request<T>({
     required String path,
     required String method,
@@ -213,6 +309,24 @@ class KimaiApiClient {
       throw KimaiApiException(detail, error);
     }
   }
+}
+
+Map<String, Object> _timesheetPayload({
+  required int projectId,
+  required DateTime beginAt,
+  required String description,
+  DateTime? endAt,
+  int? activityId,
+  String? tags,
+}) {
+  return {
+    'project': projectId,
+    if (activityId != null) 'activity': activityId,
+    'begin': formatKimaiDateTime(beginAt),
+    if (endAt != null) 'end': formatKimaiDateTime(endAt),
+    if (description.trim().isNotEmpty) 'description': description.trim(),
+    if (tags != null && tags.trim().isNotEmpty) 'tags': _splitTags(tags),
+  };
 }
 
 List<String> _splitTags(String value) {
@@ -708,6 +822,41 @@ class KimaiActivityDto {
       name: _readString(json['name']) ?? 'Untitled activity',
       visible: _readBool(json['visible'], fallback: true),
     );
+  }
+}
+
+class KimaiTagDto {
+  const KimaiTagDto({
+    required this.id,
+    required this.name,
+    this.color,
+  });
+
+  final String id;
+  final String name;
+  final String? color;
+
+  factory KimaiTagDto.fromJson(Object? value) {
+    if (value is String) {
+      final name = value.trim();
+      return KimaiTagDto(id: name, name: name);
+    }
+
+    if (value is Map<String, Object?>) {
+      final name = _readString(value['name']) ??
+          _readString(value['label']) ??
+          _readString(value['id']) ??
+          '';
+      final id = _readString(value['id']) ?? name;
+
+      return KimaiTagDto(
+        id: id,
+        name: name.trim(),
+        color: _readString(value['color']),
+      );
+    }
+
+    return const KimaiTagDto(id: '', name: '');
   }
 }
 

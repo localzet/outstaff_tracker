@@ -26,6 +26,96 @@ class LocalTrackingSyncService {
 
   final Ref _ref;
 
+  Future<LocalTimeEntry> startTimer({
+    required String appProjectId,
+    required int kimaiProjectId,
+    int? activityId,
+    String? activityName,
+    String? description,
+    String? tags,
+    DateTime? beginAt,
+  }) async {
+    final repository = _ref.read(localTrackingRepositoryProvider);
+    final entry = await repository.startTimer(
+      appProjectId: appProjectId,
+      kimaiProjectId: kimaiProjectId,
+      activityId: activityId,
+      activityName: activityName,
+      description: description,
+      tags: tags,
+      beginAt: beginAt,
+      status: LocalTimeEntryStatus.syncingStart,
+    );
+
+    try {
+      final client = await _ref.read(kimaiApiClientProvider.future);
+      final remote = await client.startTimesheet(
+        projectId: kimaiProjectId,
+        activityId: activityId,
+        beginAt: entry.beginAt,
+        description: description ?? '',
+        tags: tags,
+      );
+      await repository.markRunningSynced(
+        id: entry.id,
+        kimaiTimesheetId: remote.id,
+      );
+      await repository.upsertRunningTimesheetFromKimai(
+        entry: entry,
+        kimaiTimesheetId: remote.id,
+      );
+
+      return (await repository.getRunningEntry()) ?? entry;
+    } catch (error) {
+      if (_isOfflineError(error)) {
+        await repository.markRunningLocal(
+          entry.id,
+          error: _diagnosticError(error),
+        );
+        return (await repository.getRunningEntry()) ?? entry;
+      }
+
+      await repository.markSyncFailed(entry.id, _diagnosticError(error));
+      rethrow;
+    }
+  }
+
+  Future<LocalTimeEntry> stopTimer({DateTime? endAt}) async {
+    final repository = _ref.read(localTrackingRepositoryProvider);
+    final running = await repository.getRunningEntry();
+    if (running == null) {
+      throw StateError('Нет запущенного таймера.');
+    }
+
+    final requestedEnd = (endAt ?? DateTime.now()).toUtc();
+    final normalizedEnd = _normalizedEndAt(running.beginAt, requestedEnd);
+
+    if (running.kimaiTimesheetId == null) {
+      return repository.stopRunningTimer(endAt: normalizedEnd);
+    }
+
+    try {
+      final client = await _ref.read(kimaiApiClientProvider.future);
+      final remote = await client.stopTimesheet(
+        kimaiTimesheetId: running.kimaiTimesheetId!,
+        endAt: normalizedEnd,
+      );
+      final stopped = await repository.stopRunningTimer(
+        endAt: remote.endAt ?? normalizedEnd,
+        stoppedStatus: LocalTimeEntryStatus.synced,
+      );
+      await repository.markSynced(
+        entry: stopped,
+        kimaiTimesheetId: running.kimaiTimesheetId!,
+      );
+
+      return stopped;
+    } catch (error) {
+      await repository.markStopFailed(running.id, _diagnosticError(error));
+      rethrow;
+    }
+  }
+
   Future<LocalTrackingSyncResult> syncPendingEntries() async {
     final repository = _ref.read(localTrackingRepositoryProvider);
     final client = await _ref.read(kimaiApiClientProvider.future);
@@ -147,6 +237,28 @@ class LocalTrackingSyncService {
     }
 
     return null;
+  }
+
+  bool _isOfflineError(Object error) {
+    final dioError = switch (error) {
+      KimaiApiException(:final source) => source,
+      DioException() => error,
+      _ => null,
+    };
+
+    if (dioError == null) {
+      return false;
+    }
+
+    return dioError.type == DioExceptionType.connectionTimeout ||
+        dioError.type == DioExceptionType.receiveTimeout ||
+        dioError.type == DioExceptionType.sendTimeout ||
+        dioError.type == DioExceptionType.connectionError;
+  }
+
+  DateTime _normalizedEndAt(DateTime beginAt, DateTime endAt) {
+    final minimumEnd = beginAt.add(const Duration(minutes: 1));
+    return endAt.isBefore(minimumEnd) ? minimumEnd : endAt;
   }
 
   Object _diagnosticError(Object error) {

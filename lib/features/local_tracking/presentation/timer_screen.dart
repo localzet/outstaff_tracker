@@ -164,15 +164,21 @@ class _TimerScreenState extends ConsumerState<TimerScreen> {
             );
         unawaited(_syncPending());
       } else {
-        await ref.read(localTrackingRepositoryProvider).startTimer(
-              appProjectId: project.appProjectId,
-              kimaiProjectId: project.kimaiProjectId,
-              activityId: _activity?.id,
-              activityName: _activity?.name,
-              description: _descriptionController.text,
-              tags: _tagsController.text,
-              beginAt: startAt,
-            );
+        final entry =
+            await ref.read(localTrackingSyncServiceProvider).startTimer(
+                  appProjectId: project.appProjectId,
+                  kimaiProjectId: project.kimaiProjectId,
+                  activityId: _activity?.id,
+                  activityName: _activity?.name,
+                  description: _descriptionController.text,
+                  tags: _tagsController.text,
+                  beginAt: startAt,
+                );
+        if (entry.status == LocalTimeEntryStatus.runningLocal.storageValue) {
+          _showSnack(
+            'Таймер запущен локально. Отправим в Kimai при подключении.',
+          );
+        }
       }
       _descriptionController.clear();
       _tagsController.clear();
@@ -225,7 +231,7 @@ class _TimerScreenState extends ConsumerState<TimerScreen> {
   Future<void> _stopTimer() async {
     setState(() => _busy = true);
     try {
-      await ref.read(localTrackingRepositoryProvider).stopRunningTimer();
+      await ref.read(localTrackingSyncServiceProvider).stopTimer();
       unawaited(_syncPending());
     } catch (error) {
       _showSnack(error.toString());

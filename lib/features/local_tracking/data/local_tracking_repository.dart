@@ -6,12 +6,18 @@ import '../../timesheets/data/timesheets_repository.dart';
 
 enum LocalTimeEntryStatus {
   draft('draft'),
+  starting('starting'),
+  syncingStart('syncing_start'),
   running('running'),
+  runningSynced('running_synced'),
+  runningLocal('running_local'),
   stopped('stopped'),
   syncPending('sync_pending'),
   syncing('syncing'),
   synced('synced'),
   syncFailed('sync_failed'),
+  stopFailed('stop_failed'),
+  editFailed('edit_failed'),
   conflict('conflict');
 
   const LocalTimeEntryStatus(this.storageValue);
@@ -20,12 +26,18 @@ enum LocalTimeEntryStatus {
 
   String get label => switch (this) {
         LocalTimeEntryStatus.draft => 'Черновик',
+        LocalTimeEntryStatus.starting => 'Запуск',
+        LocalTimeEntryStatus.syncingStart => 'Идёт в Kimai',
         LocalTimeEntryStatus.running => 'Идёт',
+        LocalTimeEntryStatus.runningSynced => 'Идёт в Kimai',
+        LocalTimeEntryStatus.runningLocal => 'Идёт локально',
         LocalTimeEntryStatus.stopped => 'Остановлено',
-        LocalTimeEntryStatus.syncPending => 'Не отправлено',
+        LocalTimeEntryStatus.syncPending => 'Ожидает отправки',
         LocalTimeEntryStatus.syncing => 'Отправка',
         LocalTimeEntryStatus.synced => 'Синхронизировано',
         LocalTimeEntryStatus.syncFailed => 'Ошибка отправки',
+        LocalTimeEntryStatus.stopFailed => 'Ошибка остановки',
+        LocalTimeEntryStatus.editFailed => 'Ошибка редактирования',
         LocalTimeEntryStatus.conflict => 'Конфликт',
       };
 
@@ -89,8 +101,7 @@ class LocalTrackingRepository {
   Stream<LocalTimeEntry?> watchRunningEntry() {
     final query = _database.select(_database.localTimeEntries)
       ..where(
-        (table) =>
-            table.status.equals(LocalTimeEntryStatus.running.storageValue),
+        (table) => _runningStatusExpression(table),
       )
       ..orderBy([(table) => OrderingTerm.desc(table.beginAt)])
       ..limit(1);
@@ -101,8 +112,7 @@ class LocalTrackingRepository {
   Future<LocalTimeEntry?> getRunningEntry() {
     final query = _database.select(_database.localTimeEntries)
       ..where(
-        (table) =>
-            table.status.equals(LocalTimeEntryStatus.running.storageValue),
+        (table) => _runningStatusExpression(table),
       )
       ..limit(1);
 
@@ -113,7 +123,7 @@ class LocalTrackingRepository {
     return _database
         .customSelect(
           'SELECT COUNT(*) AS c FROM local_time_entries '
-          "WHERE status = 'running' "
+          "WHERE status IN ('starting', 'syncing_start', 'running', 'running_synced', 'running_local') "
           'UNION ALL SELECT COUNT(*) FROM timesheets WHERE end_at IS NULL',
           readsFrom: {_database.localTimeEntries, _database.timesheets},
         )
@@ -134,7 +144,7 @@ class LocalTrackingRepository {
     return _database
         .customSelect(
           "SELECT COUNT(*) AS c FROM local_time_entries "
-          "WHERE status IN ('sync_pending', 'sync_failed', 'conflict')",
+          "WHERE status IN ('sync_pending', 'sync_failed', 'stop_failed', 'edit_failed', 'conflict')",
           readsFrom: {_database.localTimeEntries},
         )
         .watchSingle()
@@ -158,8 +168,20 @@ class LocalTrackingRepository {
     ])
       ..where(
         _database.localTimeEntries.status.equals(
-          LocalTimeEntryStatus.running.storageValue,
-        ),
+              LocalTimeEntryStatus.running.storageValue,
+            ) |
+            _database.localTimeEntries.status.equals(
+              LocalTimeEntryStatus.starting.storageValue,
+            ) |
+            _database.localTimeEntries.status.equals(
+              LocalTimeEntryStatus.syncingStart.storageValue,
+            ) |
+            _database.localTimeEntries.status.equals(
+              LocalTimeEntryStatus.runningSynced.storageValue,
+            ) |
+            _database.localTimeEntries.status.equals(
+              LocalTimeEntryStatus.runningLocal.storageValue,
+            ),
       )
       ..orderBy([
         OrderingTerm.desc(_database.localTimeEntries.beginAt),
@@ -225,6 +247,8 @@ class LocalTrackingRepository {
         (table) =>
             table.status.equals(LocalTimeEntryStatus.syncPending.storageValue) |
             table.status.equals(LocalTimeEntryStatus.syncFailed.storageValue) |
+            table.status.equals(LocalTimeEntryStatus.stopFailed.storageValue) |
+            table.status.equals(LocalTimeEntryStatus.editFailed.storageValue) |
             table.status.equals(LocalTimeEntryStatus.synced.storageValue) |
             table.status.equals(LocalTimeEntryStatus.conflict.storageValue),
       )
@@ -238,7 +262,8 @@ class LocalTrackingRepository {
       ..where(
         (table) =>
             table.status.equals(LocalTimeEntryStatus.syncPending.storageValue) |
-            table.status.equals(LocalTimeEntryStatus.syncFailed.storageValue),
+            table.status.equals(LocalTimeEntryStatus.syncFailed.storageValue) |
+            table.status.equals(LocalTimeEntryStatus.stopFailed.storageValue),
       )
       ..orderBy([(table) => OrderingTerm.asc(table.beginAt)]);
 
@@ -298,6 +323,7 @@ class LocalTrackingRepository {
     String? tags,
     DateTime? beginAt,
     DateTime? now,
+    LocalTimeEntryStatus status = LocalTimeEntryStatus.running,
   }) async {
     final timestamp = (now ?? DateTime.now()).toUtc();
     final begin = (beginAt ?? timestamp).toUtc();
@@ -307,7 +333,7 @@ class LocalTrackingRepository {
       final running = await getRunningEntry();
       if (running != null) {
         throw StateError(
-          'Уже запущен таймер. Остановите его перед стартом нового.',
+          'Р Р€Р В¶Р Вµ Р В·Р В°Р С—РЎС“РЎвЂ°Р ВµР Р… РЎвЂљР В°Р в„–Р СР ВµРЎР‚. Р С›РЎРѓРЎвЂљР В°Р Р…Р С•Р Р†Р С‘РЎвЂљР Вµ Р ВµР С–Р С• Р С—Р ВµРЎР‚Р ВµР Т‘ РЎРѓРЎвЂљР В°РЎР‚РЎвЂљР С•Р С Р Р…Р С•Р Р†Р С•Р С–Р С•.',
         );
       }
 
@@ -316,7 +342,9 @@ class LocalTrackingRepository {
             ..where((table) => table.kimaiProjectId.equals(kimaiProjectId)))
           .getSingleOrNull();
       if (project == null) {
-        throw StateError('Проект недоступен для локального таймера.');
+        throw StateError(
+          'Р СџРЎР‚Р С•Р ВµР С”РЎвЂљ Р Р…Р ВµР Т‘Р С•РЎРѓРЎвЂљРЎС“Р С—Р ВµР Р… Р Т‘Р В»РЎРЏ Р В»Р С•Р С”Р В°Р В»РЎРЉР Р…Р С•Р С–Р С• РЎвЂљР В°Р в„–Р СР ВµРЎР‚Р В°.',
+        );
       }
 
       await _database.into(_database.localTimeEntries).insert(
@@ -329,7 +357,7 @@ class LocalTrackingRepository {
               description: Value(_blankToNull(description)),
               tags: Value(_blankToNull(tags)),
               beginAt: begin,
-              status: LocalTimeEntryStatus.running.storageValue,
+              status: status.storageValue,
               createdAt: timestamp,
               updatedAt: timestamp,
             ),
@@ -358,7 +386,9 @@ class LocalTrackingRepository {
     final id = 'local_${timestamp.microsecondsSinceEpoch}';
 
     if (!endAt.toUtc().isAfter(begin)) {
-      throw StateError('Окончание должно быть позже начала.');
+      throw StateError(
+        'Р С›Р С”Р С•Р Р…РЎвЂЎР В°Р Р…Р С‘Р Вµ Р Т‘Р С•Р В»Р В¶Р Р…Р С• Р В±РЎвЂ№РЎвЂљРЎРЉ Р С—Р С•Р В·Р В¶Р Вµ Р Р…Р В°РЎвЂЎР В°Р В»Р В°.',
+      );
     }
 
     await _ensureProjectAvailable(appProjectId, kimaiProjectId);
@@ -388,13 +418,16 @@ class LocalTrackingRepository {
   Future<LocalTimeEntry> stopRunningTimer({
     DateTime? endAt,
     DateTime? now,
+    LocalTimeEntryStatus? stoppedStatus,
   }) async {
     final timestamp = (now ?? DateTime.now()).toUtc();
 
     return _database.transaction(() async {
       final running = await getRunningEntry();
       if (running == null) {
-        throw StateError('Нет запущенного таймера.');
+        throw StateError(
+          'Р СњР ВµРЎвЂљ Р В·Р В°Р С—РЎС“РЎвЂ°Р ВµР Р…Р Р…Р С•Р С–Р С• РЎвЂљР В°Р в„–Р СР ВµРЎР‚Р В°.',
+        );
       }
 
       final requestedEnd = (endAt ?? timestamp).toUtc();
@@ -406,7 +439,12 @@ class LocalTrackingRepository {
           endAt: Value(normalizedEnd),
           durationSeconds:
               Value(_durationSeconds(running.beginAt, normalizedEnd)),
-          status: Value(LocalTimeEntryStatus.syncPending.storageValue),
+          status: Value(
+            stoppedStatus?.storageValue ??
+                (running.kimaiTimesheetId == null
+                    ? LocalTimeEntryStatus.syncPending.storageValue
+                    : LocalTimeEntryStatus.synced.storageValue),
+          ),
           updatedAt: Value(timestamp),
         ),
       );
@@ -428,6 +466,76 @@ class LocalTrackingRepository {
         status: Value(LocalTimeEntryStatus.syncing.storageValue),
         updatedAt: Value(now),
       ),
+    );
+  }
+
+  Future<void> markRunningSynced({
+    required String id,
+    required int kimaiTimesheetId,
+  }) {
+    final now = DateTime.now().toUtc();
+
+    return (_database.update(_database.localTimeEntries)
+          ..where((table) => table.id.equals(id)))
+        .write(
+      LocalTimeEntriesCompanion(
+        kimaiTimesheetId: Value(kimaiTimesheetId),
+        status: Value(LocalTimeEntryStatus.runningSynced.storageValue),
+        lastSyncError: const Value(null),
+        updatedAt: Value(now),
+      ),
+    );
+  }
+
+  Future<void> markRunningLocal(String id, {Object? error}) {
+    final now = DateTime.now().toUtc();
+
+    return (_database.update(_database.localTimeEntries)
+          ..where((table) => table.id.equals(id)))
+        .write(
+      LocalTimeEntriesCompanion(
+        status: Value(LocalTimeEntryStatus.runningLocal.storageValue),
+        lastSyncError: Value(error?.toString()),
+        updatedAt: Value(now),
+      ),
+    );
+  }
+
+  Future<void> upsertRunningTimesheetFromKimai({
+    required LocalTimeEntry entry,
+    required int kimaiTimesheetId,
+  }) async {
+    final now = DateTime.now().toUtc();
+    await _database.into(_database.timesheets).insertOnConflictUpdate(
+          TimesheetsCompanion(
+            id: Value(kimaiTimesheetId),
+            kimaiProjectId: Value(entry.kimaiProjectId),
+            appProjectId: Value(entry.projectId),
+            activityName: Value(entry.activityName),
+            description: Value(entry.description),
+            tags: Value(entry.tags),
+            beginAt: Value(entry.beginAt),
+            durationSeconds: const Value(0),
+            currency: const Value('RUB'),
+            syncedAt: Value(now),
+          ),
+        );
+  }
+
+  Future<void> markStopFailed(String id, Object error) {
+    final now = DateTime.now().toUtc();
+
+    return _database.customUpdate(
+      'UPDATE local_time_entries '
+      'SET status = ?, sync_attempts = sync_attempts + 1, '
+      'last_sync_error = ?, updated_at = ? WHERE id = ?',
+      variables: [
+        Variable(LocalTimeEntryStatus.stopFailed.storageValue),
+        Variable(error.toString()),
+        Variable(now),
+        Variable(id),
+      ],
+      updates: {_database.localTimeEntries},
     );
   }
 
@@ -563,7 +671,9 @@ class LocalTrackingRepository {
           ..where((table) => table.kimaiProjectId.equals(kimaiProjectId)))
         .getSingleOrNull();
     if (project == null) {
-      throw StateError('Проект недоступен для локального таймера.');
+      throw StateError(
+        'Р СџРЎР‚Р С•Р ВµР С”РЎвЂљ Р Р…Р ВµР Т‘Р С•РЎРѓРЎвЂљРЎС“Р С—Р ВµР Р… Р Т‘Р В»РЎРЏ Р В»Р С•Р С”Р В°Р В»РЎРЉР Р…Р С•Р С–Р С• РЎвЂљР В°Р в„–Р СР ВµРЎР‚Р В°.',
+      );
     }
   }
 
@@ -637,3 +747,11 @@ final pendingLocalEntriesCountProvider = StreamProvider<int>((ref) {
 final localTrackingQueueProvider = StreamProvider<List<LocalTimeEntry>>((ref) {
   return ref.watch(localTrackingRepositoryProvider).watchQueue();
 });
+
+Expression<bool> _runningStatusExpression(LocalTimeEntries table) {
+  return table.status.equals(LocalTimeEntryStatus.running.storageValue) |
+      table.status.equals(LocalTimeEntryStatus.starting.storageValue) |
+      table.status.equals(LocalTimeEntryStatus.syncingStart.storageValue) |
+      table.status.equals(LocalTimeEntryStatus.runningSynced.storageValue) |
+      table.status.equals(LocalTimeEntryStatus.runningLocal.storageValue);
+}

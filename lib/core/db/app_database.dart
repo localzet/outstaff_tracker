@@ -52,6 +52,16 @@ class KimaiActivities extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
+class KimaiTags extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  TextColumn get color => text().nullable()();
+  DateTimeColumn get syncedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
 class AppProjects extends Table {
   TextColumn get id => text()();
   IntColumn get kimaiProjectId => integer()
@@ -189,6 +199,7 @@ class SyncLogs extends Table {
     SyncState,
     KimaiProjects,
     KimaiActivities,
+    KimaiTags,
     AppProjects,
     PayoutDates,
     ProjectRateHistory,
@@ -213,7 +224,7 @@ class AppDatabase extends _$AppDatabase {
         );
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -249,6 +260,9 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 10) {
             await m.addColumn(localTimeEntries, localTimeEntries.tags);
+          }
+          if (from < 11) {
+            await m.createTable(kimaiTags);
           }
         },
       );
