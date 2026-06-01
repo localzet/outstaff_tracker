@@ -5,6 +5,9 @@ class AppSettings {
     required this.locale,
     required this.comfortableWeeklyCapacityHours,
     required this.assumePastPayoutsPaid,
+    required this.autoCheckUpdates,
+    required this.includePrereleaseUpdates,
+    required this.lastUpdateCheckAt,
   });
 
   static const defaults = AppSettings(
@@ -13,6 +16,9 @@ class AppSettings {
     locale: 'ru_RU',
     comfortableWeeklyCapacityHours: 40,
     assumePastPayoutsPaid: true,
+    autoCheckUpdates: true,
+    includePrereleaseUpdates: false,
+    lastUpdateCheckAt: null,
   );
 
   final String baseUrl;
@@ -20,6 +26,9 @@ class AppSettings {
   final String locale;
   final double comfortableWeeklyCapacityHours;
   final bool assumePastPayoutsPaid;
+  final bool autoCheckUpdates;
+  final bool includePrereleaseUpdates;
+  final DateTime? lastUpdateCheckAt;
 
   AppSettings copyWith({
     String? baseUrl,
@@ -27,6 +36,9 @@ class AppSettings {
     String? locale,
     double? comfortableWeeklyCapacityHours,
     bool? assumePastPayoutsPaid,
+    bool? autoCheckUpdates,
+    bool? includePrereleaseUpdates,
+    DateTime? lastUpdateCheckAt,
   }) {
     return AppSettings(
       baseUrl: baseUrl ?? this.baseUrl,
@@ -36,6 +48,10 @@ class AppSettings {
           comfortableWeeklyCapacityHours ?? this.comfortableWeeklyCapacityHours,
       assumePastPayoutsPaid:
           assumePastPayoutsPaid ?? this.assumePastPayoutsPaid,
+      autoCheckUpdates: autoCheckUpdates ?? this.autoCheckUpdates,
+      includePrereleaseUpdates:
+          includePrereleaseUpdates ?? this.includePrereleaseUpdates,
+      lastUpdateCheckAt: lastUpdateCheckAt ?? this.lastUpdateCheckAt,
     );
   }
 }

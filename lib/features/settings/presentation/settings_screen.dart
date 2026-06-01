@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/db/app_database.dart';
 import '../../../core/network/kimai_api_client.dart';
@@ -17,6 +18,9 @@ import '../../projects/data/projects_repository.dart';
 import '../../projects/presentation/projects_screen.dart';
 import '../../sync/data/sync_controller.dart';
 import '../../sync/data/sync_repository.dart';
+import '../../updates/data/update_controller.dart';
+import '../../updates/data/update_repository.dart';
+import '../../updates/data/update_service.dart';
 import '../data/app_settings.dart';
 import '../data/settings_repository.dart';
 
@@ -35,6 +39,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _tokenController = TextEditingController();
   final _capacityController = TextEditingController();
   bool _assumePastPayoutsPaid = true;
+  bool _autoCheckUpdates = true;
 
   bool _settingsLoaded = false;
   bool _saving = false;
@@ -120,6 +125,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         'Скрывает старые выплаты из списка действий после первого импорта.',
                       ),
                     ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _autoCheckUpdates,
+                      onChanged: (value) {
+                        setState(() => _autoCheckUpdates = value);
+                      },
+                      title: const Text('Проверять обновления автоматически'),
+                      subtitle: const Text(
+                        'Приложение проверяет новую версию не чаще одного раза в день и не мешает запуску.',
+                      ),
+                    ),
                     const SizedBox(height: 24),
                     Wrap(
                       spacing: 8,
@@ -170,6 +186,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
         ConnectionStatusBlock(status: _connectionStatus),
+        const UpdateStatusBlock(),
         SyncProgressBlock(syncState: syncState),
         const DataSafetyPanel(),
         latestSyncLog.when(
@@ -197,6 +214,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _capacityController.text =
         settings.comfortableWeeklyCapacityHours.toStringAsFixed(0);
     _assumePastPayoutsPaid = settings.assumePastPayoutsPaid;
+    _autoCheckUpdates = settings.autoCheckUpdates;
     _settingsLoaded = true;
   }
 
@@ -219,6 +237,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         locale: 'ru_RU',
         comfortableWeeklyCapacityHours: capacity,
         assumePastPayoutsPaid: _assumePastPayoutsPaid,
+        autoCheckUpdates: _autoCheckUpdates,
+        includePrereleaseUpdates: currentSettings.includePrereleaseUpdates,
+        lastUpdateCheckAt: currentSettings.lastUpdateCheckAt,
       );
 
       await ref.read(settingsRepositoryProvider).saveSettings(settings);
@@ -337,6 +358,106 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         );
       }
     }
+  }
+}
+
+class UpdateStatusBlock extends ConsumerWidget {
+  const UpdateStatusBlock({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(updateControllerProvider);
+    final packageInfo = ref.watch(packageInfoProvider);
+    final controller = ref.read(updateControllerProvider.notifier);
+    final result = state.result;
+    final updateAvailable = result?.hasUpdate ?? false;
+    final nativeUpdatesSupported =
+        result?.installMode == UpdateInstallMode.native;
+    final statusText = state.isChecking
+        ? 'Проверяем обновления...'
+        : state.lastError != null
+            ? 'Ошибка проверки обновлений'
+            : updateAvailable
+                ? 'Доступна версия ${result!.metadata.version}'
+                : result == null
+                    ? 'Проверка ещё не выполнялась'
+                    : 'Обновлений нет';
+
+    return AppPanel(
+      child: Row(
+        children: [
+          Icon(
+            updateAvailable
+                ? Icons.system_update_alt_rounded
+                : Icons.verified_rounded,
+            color: updateAvailable ? AppColors.warning : AppColors.textMuted,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Обновления',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 6),
+                packageInfo.when(
+                  data: (info) => Text(
+                    'Текущая версия: ${info.version}+${info.buildNumber}',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  loading: () => const SizedBox.shrink(),
+                  error: (error, stackTrace) => Text(
+                    'Текущая версия недоступна',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+                Text(statusText, style: Theme.of(context).textTheme.bodyMedium),
+                if (state.lastError != null) ...[
+                  const SizedBox(height: 6),
+                  SelectableText(
+                    state.lastError!,
+                    style: const TextStyle(color: AppColors.warning),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed:
+                    state.isChecking ? null : () => controller.checkNow(),
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Проверить'),
+              ),
+              if (updateAvailable)
+                FilledButton.icon(
+                  onPressed: nativeUpdatesSupported
+                      ? () => controller.installLatestUpdate()
+                      : () => launchUrl(
+                            Uri.parse(result!.metadata.releaseNotesUrl),
+                            mode: LaunchMode.externalApplication,
+                          ),
+                  icon: Icon(
+                    nativeUpdatesSupported
+                        ? Icons.download_rounded
+                        : Icons.open_in_new_rounded,
+                    size: 18,
+                  ),
+                  label: Text(
+                    nativeUpdatesSupported ? 'Обновить' : 'Открыть релиз',
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 

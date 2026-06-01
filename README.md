@@ -78,6 +78,54 @@ Unsigned installers may show Microsoft Defender SmartScreen warnings such as
 `Unknown publisher`. A valid Authenticode signature is required for Windows to
 display the verified publisher.
 
+## Auto-update
+
+Windows builds check GitHub Releases for updates. The app reads:
+
+- `latest.json` for version metadata, release notes URL, installer URL and SHA256.
+- `appcast.xml` for the native `auto_updater` / WinSparkle install flow.
+- GitHub Releases API
+  `https://api.github.com/repos/{owner}/{repo}/releases/latest` as a safe
+  fallback when native update metadata is unavailable.
+
+Automatic checks run in the app at most once per day and can be disabled in
+settings. Windows prefers the native installer flow when appcast metadata is
+available. In fallback mode the app opens the installer asset or release page in
+the external browser and never silently downloads or executes an `.exe`.
+
+The Windows installer artifact is:
+
+```text
+outstaff_tracker-setup-{version}.exe
+```
+
+Android does not install updates silently. Use the APK/AAB release artifacts or
+store distribution later. Web builds are updated by redeploying the hosted web
+bundle.
+
+Create a release by pushing a semantic version tag:
+
+```bash
+git tag v0.1.1
+git push origin v0.1.1
+```
+
+GitHub Actions builds and attaches:
+
+- `outstaff_tracker-setup-{version}.exe`
+- `outstaff_tracker-windows-portable-{version}.zip`
+- `outstaff_tracker-android-{version}.apk`
+- `outstaff_tracker-android-{version}.aab`
+- `outstaff_tracker-web-{version}.zip`
+- `SHA256SUMS.txt`
+- `latest.json`
+- `appcast.xml`
+
+If signing secrets are absent, the installer and updater still work, but Windows
+may show SmartScreen warnings. Production distribution should use a trusted
+OV/EV Authenticode certificate; self-signed certificates are useful only for
+testing and do not create a trusted publisher identity.
+
 ## Branding Assets
 
 Branding source and generated platform icons are checked into the repository:

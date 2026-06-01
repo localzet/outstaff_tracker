@@ -369,11 +369,80 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download release artifacts
         uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
+
+      - name: Generate checksums and update metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          PUBSPEC_VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
+          REPOSITORY="${GITHUB_REPOSITORY}"
+          RELEASE_URL="https://github.com/${REPOSITORY}/releases/tag/${TAG}"
+          DOWNLOAD_BASE_URL="https://github.com/${REPOSITORY}/releases/download/${TAG}"
+          PUBLISHED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          WINDOWS_INSTALLER="outstaff_tracker-setup-${VERSION}.exe"
+
+          if [[ ! -f "dist/${WINDOWS_INSTALLER}" ]]; then
+            echo "Windows installer was not found: dist/${WINDOWS_INSTALLER}" >&2
+            exit 1
+          fi
+
+          (cd dist && sha256sum * > SHA256SUMS.txt)
+          WINDOWS_SHA256="$(sha256sum "dist/${WINDOWS_INSTALLER}" | awk '{print $1}')"
+          WINDOWS_SIZE="$(stat -c%s "dist/${WINDOWS_INSTALLER}")"
+          WINDOWS_URL="${DOWNLOAD_BASE_URL}/${WINDOWS_INSTALLER}"
+
+          cat > dist/latest.json <<EOF
+          {
+            "tag": "${TAG}",
+            "version": "${VERSION}",
+            "pubspecVersion": "${PUBSPEC_VERSION}",
+            "publishedAt": "${PUBLISHED_AT}",
+            "prerelease": false,
+            "releaseNotesUrl": "${RELEASE_URL}",
+            "assets": {
+              "windowsInstaller": {
+                "name": "${WINDOWS_INSTALLER}",
+                "url": "${WINDOWS_URL}",
+                "sha256": "${WINDOWS_SHA256}",
+                "size": ${WINDOWS_SIZE}
+              }
+            }
+          }
+          EOF
+
+          PUB_DATE="$(date -u -R)"
+          cat > dist/appcast.xml <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <channel>
+              <title>Outstaff Tracker Updates</title>
+              <description>Outstaff Tracker release feed</description>
+              <language>ru</language>
+              <item>
+                <title>Version ${VERSION}</title>
+                <sparkle:releaseNotesLink>${RELEASE_URL}</sparkle:releaseNotesLink>
+                <pubDate>${PUB_DATE}</pubDate>
+                <enclosure url="${WINDOWS_URL}"
+                           sparkle:version="${VERSION}"
+                           sparkle:shortVersionString="${VERSION}"
+                           sparkle:os="windows"
+                           sparkle:sha256="${WINDOWS_SHA256}"
+                           length="${WINDOWS_SIZE}"
+                           type="application/octet-stream" />
+              </item>
+            </channel>
+          </rss>
+          EOF
 
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2

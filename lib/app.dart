@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'core/config/app_branding.dart';
 import 'core/theme/app_theme.dart';
@@ -19,6 +20,9 @@ import 'features/settings/data/settings_repository.dart';
 import 'features/settings/presentation/settings_screen.dart';
 import 'features/sync/data/sync_controller.dart';
 import 'features/timesheets/presentation/timesheets_screen.dart';
+import 'features/updates/data/update_controller.dart';
+import 'features/updates/data/update_repository.dart';
+import 'features/updates/data/update_service.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -108,7 +112,107 @@ class OutstaffTrackerApp extends ConsumerWidget {
         GlobalWidgetsLocalizations.delegate,
       ],
       routerConfig: router,
-      builder: (context, child) => AutoSyncHost(child: child),
+      builder: (context, child) => AutoUpdateHost(
+        child: AutoSyncHost(child: child),
+      ),
+    );
+  }
+}
+
+class AutoUpdateHost extends ConsumerStatefulWidget {
+  const AutoUpdateHost({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  ConsumerState<AutoUpdateHost> createState() => _AutoUpdateHostState();
+}
+
+class _AutoUpdateHostState extends ConsumerState<AutoUpdateHost> {
+  bool _dialogShown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(
+        ref.read(updateControllerProvider.notifier).checkOnStartup(),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen(updateControllerProvider, (previous, next) {
+      final result = next.result;
+      if (_dialogShown || result == null || !result.hasUpdate) {
+        return;
+      }
+
+      _dialogShown = true;
+      unawaited(_showUpdateDialog(result));
+    });
+
+    return widget.child;
+  }
+
+  Future<void> _showUpdateDialog(UpdateCheckResult result) async {
+    if (!mounted) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        final nativeUpdatesSupported =
+            result.installMode == UpdateInstallMode.native;
+        return AlertDialog(
+          title: const Text('Доступна новая версия'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Текущая версия: ${result.currentVersion}'),
+              Text('Новая версия: ${result.metadata.version}'),
+              const SizedBox(height: 12),
+              TextButton.icon(
+                onPressed: () {
+                  launchUrl(
+                    Uri.parse(result.metadata.releaseNotesUrl),
+                    mode: LaunchMode.externalApplication,
+                  );
+                },
+                icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                label: const Text('Что изменилось'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Позже'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                if (nativeUpdatesSupported) {
+                  ref
+                      .read(updateControllerProvider.notifier)
+                      .installLatestUpdate();
+                } else {
+                  launchUrl(
+                    Uri.parse(result.metadata.releaseNotesUrl),
+                    mode: LaunchMode.externalApplication,
+                  );
+                }
+              },
+              child: Text(
+                nativeUpdatesSupported ? 'Обновить' : 'Открыть релиз',
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

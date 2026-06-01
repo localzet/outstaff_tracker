@@ -14,6 +14,10 @@ class SettingsRepository {
   static const comfortableWeeklyCapacityHoursKey =
       'settings.capacity.weekly_hours';
   static const assumePastPayoutsPaidKey = 'settings.payouts.assume_past_paid';
+  static const autoCheckUpdatesKey = 'settings.updates.auto_check';
+  static const includePrereleaseUpdatesKey =
+      'settings.updates.include_prerelease';
+  static const lastUpdateCheckAtKey = 'settings.updates.last_checked_at';
 
   final AppDatabase _database;
 
@@ -35,6 +39,14 @@ class SettingsRepository {
             values[assumePastPayoutsPaidKey] ?? '',
           ) ??
           AppSettings.defaults.assumePastPayoutsPaid,
+      autoCheckUpdates: bool.tryParse(values[autoCheckUpdatesKey] ?? '') ??
+          AppSettings.defaults.autoCheckUpdates,
+      includePrereleaseUpdates:
+          bool.tryParse(values[includePrereleaseUpdatesKey] ?? '') ??
+              AppSettings.defaults.includePrereleaseUpdates,
+      lastUpdateCheckAt: DateTime.tryParse(
+        values[lastUpdateCheckAtKey] ?? '',
+      )?.toLocal(),
     );
   }
 
@@ -51,7 +63,26 @@ class SettingsRepository {
         assumePastPayoutsPaidKey,
         settings.assumePastPayoutsPaid.toString(),
       );
+      await _upsertValue(
+        autoCheckUpdatesKey,
+        settings.autoCheckUpdates.toString(),
+      );
+      await _upsertValue(
+        includePrereleaseUpdatesKey,
+        settings.includePrereleaseUpdates.toString(),
+      );
+      final lastUpdateCheckAt = settings.lastUpdateCheckAt;
+      if (lastUpdateCheckAt != null) {
+        await _upsertValue(
+          lastUpdateCheckAtKey,
+          lastUpdateCheckAt.toUtc().toIso8601String(),
+        );
+      }
     });
+  }
+
+  Future<void> setLastUpdateCheckAt(DateTime value) {
+    return _upsertValue(lastUpdateCheckAtKey, value.toUtc().toIso8601String());
   }
 
   Future<bool> isOnboardingComplete() async {
@@ -75,6 +106,9 @@ class SettingsRepository {
       onboardingCompleteKey,
       comfortableWeeklyCapacityHoursKey,
       assumePastPayoutsPaidKey,
+      autoCheckUpdatesKey,
+      includePrereleaseUpdatesKey,
+      lastUpdateCheckAtKey,
     };
 
     return {
@@ -91,6 +125,9 @@ class SettingsRepository {
       onboardingCompleteKey,
       comfortableWeeklyCapacityHoursKey,
       assumePastPayoutsPaidKey,
+      autoCheckUpdatesKey,
+      includePrereleaseUpdatesKey,
+      lastUpdateCheckAtKey,
     };
     await _database.transaction(() async {
       for (final entry in values.entries) {
