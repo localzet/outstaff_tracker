@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_time_formats.dart';
+import '../../../core/widgets/app_progress_bar.dart';
 import '../../../core/widgets/app_screen.dart';
 import '../../timesheets/data/timesheets_repository.dart';
 
@@ -226,6 +227,7 @@ class CalendarHeatmap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const dayTargetSeconds = 8 * 60 * 60;
     final totals = [
       for (final day in days)
         (entriesByDay[day] ?? const <TimesheetEntry>[]).fold<int>(
@@ -233,11 +235,6 @@ class CalendarHeatmap extends StatelessWidget {
           (sum, entry) => sum + entry.timesheet.durationSeconds,
         ),
     ];
-    final maxSeconds = totals.fold<int>(
-      0,
-      (max, value) => value > max ? value : max,
-    );
-
     return AppPanel(
       child: Row(
         children: [
@@ -252,13 +249,10 @@ class CalendarHeatmap extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 6),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(999),
-                    child: LinearProgressIndicator(
-                      minHeight: 6,
-                      value: maxSeconds == 0 ? 0 : totals[index] / maxSeconds,
-                      backgroundColor: AppColors.surfaceElevated,
-                    ),
+                  AppGoalProgressBar(
+                    trackedSeconds: totals[index],
+                    targetSeconds: dayTargetSeconds,
+                    height: 6,
                   ),
                 ],
               ),

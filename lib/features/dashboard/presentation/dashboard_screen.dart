@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_time_formats.dart';
+import '../../../core/widgets/app_progress_bar.dart';
 import '../../../core/widgets/app_screen.dart';
 import '../../payments/data/payments_repository.dart';
 import '../../payments/presentation/payments_screen.dart';
@@ -103,7 +104,7 @@ class DashboardScreen extends ConsumerWidget {
           error: (error, stackTrace) => const SizedBox.shrink(),
         ),
         progressHistory.when(
-          data: (items) => WeeklyProgressHistoryPanel(items: items),
+          data: (items) => WeeklyProgressHistoryTable(items: items),
           loading: () => const LinearProgressIndicator(),
           error: (error, stackTrace) => EmptyState(
             title: 'История прогресса недоступна',
@@ -235,12 +236,9 @@ class ProjectProgressCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          LinearProgressIndicator(
-            value: goalSeconds <= 0
-                ? 0
-                : (summary.totalSeconds / goalSeconds).clamp(0, 1).toDouble(),
-            backgroundColor: AppColors.surfaceElevated,
-            color: AppColors.accent,
+          AppGoalProgressBar(
+            trackedSeconds: summary.totalSeconds,
+            targetSeconds: goalSeconds,
           ),
           const SizedBox(height: 12),
           Text(
@@ -467,6 +465,100 @@ class WeeklyProgressHistoryPanel extends StatelessWidget {
             ],
         ],
       ),
+    );
+  }
+}
+
+class WeeklyProgressHistoryTable extends StatelessWidget {
+  const WeeklyProgressHistoryTable({required this.items, super.key});
+
+  final List<WeeklyProjectProgress> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = items.take(24).toList();
+    return AppPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'История прогресса',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 12),
+          if (visible.isEmpty)
+            Text(
+              'Нет данных по недельным целям.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            )
+          else ...[
+            const _ProgressHistoryHeader(),
+            const SizedBox(height: 8),
+            for (final item in visible) ...[
+              _DashboardProgressHistoryRow(item: item),
+              if (item != visible.last) const Divider(height: 16),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ProgressHistoryHeader extends StatelessWidget {
+  const _ProgressHistoryHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodyMedium;
+
+    return Row(
+      children: [
+        Expanded(flex: 2, child: Text('Неделя / проект', style: style)),
+        Expanded(child: Text('Цель', style: style)),
+        Expanded(child: Text('Сделано', style: style)),
+        Expanded(child: Text('Баланс', style: style)),
+        Expanded(child: Text('Доход', style: style)),
+      ],
+    );
+  }
+}
+
+class _DashboardProgressHistoryRow extends StatelessWidget {
+  const _DashboardProgressHistoryRow({required this.item});
+
+  final WeeklyProjectProgress item;
+
+  @override
+  Widget build(BuildContext context) {
+    final balance = item.overworkSeconds > 0
+        ? '+${formatDurationSeconds(item.overworkSeconds)}'
+        : formatDurationSeconds(item.remainingSeconds);
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: Text(
+                '${DateTimeFormats.date.format(item.weekStart)} · ${item.projectName}',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Expanded(child: Text(formatDurationSeconds(item.goalSeconds))),
+            Expanded(child: Text(formatDurationSeconds(item.trackedSeconds))),
+            Expanded(child: Text(balance)),
+            Expanded(child: Text(formatMoneyRub(item.amountMinor))),
+          ],
+        ),
+        const SizedBox(height: 8),
+        AppGoalProgressBar(
+          trackedSeconds: item.trackedSeconds,
+          targetSeconds: item.goalSeconds,
+          height: 6,
+        ),
+      ],
     );
   }
 }

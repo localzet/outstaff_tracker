@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/date_time_formats.dart';
+import '../../../core/widgets/app_progress_bar.dart';
 import '../../../core/widgets/app_screen.dart';
 import '../../payments/data/payments_repository.dart';
 import '../../timesheets/data/timesheets_repository.dart';
@@ -125,7 +126,9 @@ class _WeeklyHistoryView extends StatelessWidget {
               'Нет данных за выбранный период.',
               style: Theme.of(context).textTheme.bodyMedium,
             )
-          else
+          else ...[
+            const _ProgressHeader(title: 'Неделя / проект'),
+            const SizedBox(height: 8),
             for (final item in filtered) ...[
               _ProgressRow(
                 title:
@@ -136,6 +139,7 @@ class _WeeklyHistoryView extends StatelessWidget {
               ),
               if (item != filtered.last) const Divider(height: 18),
             ],
+          ],
         ],
       ),
     );
@@ -158,7 +162,9 @@ class _PayoutPeriodHistoryView extends StatelessWidget {
               'Нет активных периодов выплат.',
               style: Theme.of(context).textTheme.bodyMedium,
             )
-          else
+          else ...[
+            const _ProgressHeader(title: 'Период / проект'),
+            const SizedBox(height: 8),
             for (final item in items) ...[
               Text(
                 item.projectName,
@@ -183,8 +189,30 @@ class _PayoutPeriodHistoryView extends StatelessWidget {
               ),
               if (item != items.last) const Divider(height: 22),
             ],
+          ],
         ],
       ),
+    );
+  }
+}
+
+class _ProgressHeader extends StatelessWidget {
+  const _ProgressHeader({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodyMedium;
+
+    return Row(
+      children: [
+        Expanded(flex: 3, child: Text(title, style: style)),
+        Expanded(child: Text('Цель', style: style)),
+        Expanded(child: Text('Сделано', style: style)),
+        Expanded(child: Text('Баланс', style: style)),
+        Expanded(child: Text('Доход', style: style)),
+      ],
     );
   }
 }
@@ -206,22 +234,32 @@ class _ProgressRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final balance = trackedSeconds - goalSeconds;
 
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          flex: 3,
-          child: Text(title, overflow: TextOverflow.ellipsis),
+        Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: Text(title, overflow: TextOverflow.ellipsis),
+            ),
+            Expanded(child: Text(formatDurationSeconds(goalSeconds))),
+            Expanded(child: Text(formatDurationSeconds(trackedSeconds))),
+            Expanded(
+              child: Text(
+                balance >= 0
+                    ? '+${formatDurationSeconds(balance)}'
+                    : formatDurationSeconds(balance.abs()),
+              ),
+            ),
+            Expanded(child: Text(formatMoneyRub(amountMinor))),
+          ],
         ),
-        Expanded(child: Text(formatDurationSeconds(goalSeconds))),
-        Expanded(child: Text(formatDurationSeconds(trackedSeconds))),
-        Expanded(
-          child: Text(
-            balance >= 0
-                ? '+${formatDurationSeconds(balance)}'
-                : formatDurationSeconds(balance.abs()),
-          ),
+        const SizedBox(height: 8),
+        AppGoalProgressBar(
+          trackedSeconds: trackedSeconds,
+          targetSeconds: goalSeconds,
+          height: 6,
         ),
-        Expanded(child: Text(formatMoneyRub(amountMinor))),
       ],
     );
   }
