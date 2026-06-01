@@ -40,6 +40,7 @@ void main() {
             kimaiProjectId: const Value(1),
             appProjectId: const Value('kimai_1'),
             beginAt: DateTime.now(),
+            endAt: Value(DateTime.now().add(const Duration(hours: 1))),
             durationSeconds: const Value(3600),
             amountMinor: const Value(10000),
             syncedAt: DateTime.utc(2026),

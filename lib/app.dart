@@ -12,6 +12,8 @@ import 'features/analytics/presentation/analytics_screen.dart';
 import 'features/calendar/presentation/calendar_screen.dart';
 import 'features/dashboard/presentation/dashboard_screen.dart';
 import 'features/diagnostics/presentation/diagnostics_screen.dart';
+import 'features/local_tracking/data/local_tracking_sync_service.dart';
+import 'features/local_tracking/presentation/timer_screen.dart';
 import 'features/onboarding/presentation/onboarding_screen.dart';
 import 'features/payments/presentation/payments_screen.dart';
 import 'features/progress/presentation/progress_history_screen.dart';
@@ -63,6 +65,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: TimesheetsScreen.routePath,
             builder: (context, state) => const TimesheetsScreen(),
+          ),
+          GoRoute(
+            path: TimerScreen.routePath,
+            builder: (context, state) => const TimerScreen(),
           ),
           GoRoute(
             path: ProjectsScreen.routePath,
@@ -244,6 +250,18 @@ class _AutoSyncHostState extends ConsumerState<AutoSyncHost> {
       final controller = ref.read(syncControllerProvider.notifier);
       final state = ref.read(syncControllerProvider);
       if (!state.isSyncing) {
+        unawaited(
+          ref
+              .read(localTrackingSyncServiceProvider)
+              .syncPendingEntries()
+              .catchError(
+                (_) => const LocalTrackingSyncResult(
+                  synced: 0,
+                  failed: 0,
+                  conflicts: 0,
+                ),
+              ),
+        );
         unawaited(controller.runIncrementalSync().catchError((_) {}));
       }
     });
@@ -276,6 +294,11 @@ class AppShell extends StatelessWidget {
       label: 'Календарь',
       path: CalendarScreen.routePath,
       icon: Icons.calendar_month_rounded,
+    ),
+    NavigationDestinationData(
+      label: 'Таймер',
+      path: TimerScreen.routePath,
+      icon: Icons.play_circle_rounded,
     ),
     NavigationDestinationData(
       label: 'Время',
@@ -329,6 +352,11 @@ class AppShell extends StatelessWidget {
       label: '\u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c',
       path: CalendarScreen.routePath,
       icon: Icons.calendar_month_rounded,
+    ),
+    NavigationDestinationData(
+      label: 'Таймер',
+      path: TimerScreen.routePath,
+      icon: Icons.play_circle_rounded,
     ),
     NavigationDestinationData(
       label: '\u0412\u0440\u0435\u043c\u044f',

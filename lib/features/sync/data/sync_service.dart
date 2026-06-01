@@ -118,6 +118,7 @@ class SyncService {
           .read(projectsRepositoryProvider)
           .getEnabledKimaiAppProjects();
       final client = await _ref.read(kimaiApiClientProvider.future);
+      await _syncActivities(database, client);
       final timesheetsRepository = _ref.read(timesheetsRepositoryProvider);
       final firstBegin = ranges.first.begin;
       final finalEnd = ranges.last.end;
@@ -263,6 +264,29 @@ class SyncService {
 
       Error.throwWithStackTrace(SyncFailureException(details), stackTrace);
     }
+  }
+
+  Future<void> _syncActivities(
+    AppDatabase database,
+    KimaiApiClient client,
+  ) async {
+    final activities = await client.fetchActivities();
+    final now = DateTime.now().toUtc();
+    await database.batch((batch) {
+      batch.insertAllOnConflictUpdate(
+        database.kimaiActivities,
+        [
+          for (final activity in activities)
+            KimaiActivitiesCompanion(
+              id: Value(activity.id),
+              projectId: Value(activity.projectId),
+              name: Value(activity.name),
+              visible: Value(activity.visible),
+              syncedAt: Value(now),
+            ),
+        ],
+      );
+    });
   }
 
   static List<KimaiSyncRange> _splitByMonth(KimaiSyncRange range) {

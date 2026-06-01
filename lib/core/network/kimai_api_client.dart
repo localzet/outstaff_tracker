@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import '../storage/secure_token_storage.dart';
+import '../utils/tags.dart';
 import 'kimai_url.dart';
 
 class KimaiApiClient {
@@ -41,6 +42,23 @@ class KimaiApiClient {
     return data
         .whereType<Map<String, Object?>>()
         .map(KimaiProjectDto.fromJson)
+        .toList(growable: false);
+  }
+
+  Future<List<KimaiActivityDto>> fetchActivities({int? projectId}) async {
+    final response = await _request<List<dynamic>>(
+      path: 'activities',
+      method: 'GET',
+      queryParameters: {
+        'visible': 3,
+        if (projectId != null) 'project': projectId,
+      },
+    );
+
+    final data = response.data ?? const [];
+    return data
+        .whereType<Map<String, Object?>>()
+        .map(KimaiActivityDto.fromJson)
         .toList(growable: false);
   }
 
@@ -98,7 +116,7 @@ class KimaiApiClient {
   }
 
   Future<KimaiTimesheetFetchResult> fetchTimesheetsForReport({
-    required int projectId,
+    int? projectId,
     required DateTime begin,
     required DateTime end,
     int? userId,
@@ -116,10 +134,35 @@ class KimaiApiClient {
     );
   }
 
+  Future<KimaiTimesheetDto> createTimesheet({
+    required int projectId,
+    required DateTime beginAt,
+    required DateTime endAt,
+    required String description,
+    int? activityId,
+    String? tags,
+  }) async {
+    final response = await _request<Map<String, Object?>>(
+      path: 'timesheets',
+      method: 'POST',
+      data: {
+        'project': projectId,
+        if (activityId != null) 'activity': activityId,
+        'begin': formatKimaiDateTime(beginAt),
+        'end': formatKimaiDateTime(endAt),
+        if (description.trim().isNotEmpty) 'description': description.trim(),
+        if (tags != null && tags.trim().isNotEmpty) 'tags': _splitTags(tags),
+      },
+    );
+
+    return KimaiTimesheetDto.fromJson(response.data ?? const {});
+  }
+
   Future<Response<T>> _request<T>({
     required String path,
     required String method,
     Map<String, Object?>? queryParameters,
+    Object? data,
   }) async {
     final token = await _tokenStorage.readKimaiToken();
     if (token == null || token.trim().isEmpty) {
@@ -143,10 +186,12 @@ class KimaiApiClient {
           method: method,
           headers: {
             Headers.acceptHeader: Headers.jsonContentType,
+            Headers.contentTypeHeader: Headers.jsonContentType,
             'Authorization': 'Bearer $token',
           },
         ),
         queryParameters: sanitizedQuery,
+        data: data,
       );
 
       return response;
@@ -168,6 +213,14 @@ class KimaiApiClient {
       throw KimaiApiException(detail, error);
     }
   }
+}
+
+List<String> _splitTags(String value) {
+  return value
+      .split(',')
+      .map((tag) => tag.trim())
+      .where((tag) => tag.isNotEmpty)
+      .toList(growable: false);
 }
 
 const kimaiDefaultPageSize = 50;
@@ -631,6 +684,33 @@ class KimaiProjectDto {
   }
 }
 
+class KimaiActivityDto {
+  const KimaiActivityDto({
+    required this.id,
+    required this.name,
+    required this.visible,
+    this.projectId,
+  });
+
+  final int id;
+  final int? projectId;
+  final String name;
+  final bool visible;
+
+  factory KimaiActivityDto.fromJson(Map<String, Object?> json) {
+    final project = json['project'];
+
+    return KimaiActivityDto(
+      id: _readInt(json['id']),
+      projectId: project is Map<String, Object?>
+          ? _readNullableInt(project['id'])
+          : _readNullableInt(json['project']),
+      name: _readString(json['name']) ?? 'Untitled activity',
+      visible: _readBool(json['visible'], fallback: true),
+    );
+  }
+}
+
 class KimaiCurrentUserDto {
   const KimaiCurrentUserDto({
     required this.id,
@@ -684,7 +764,7 @@ class KimaiUserDto {
       id: _readInt(json['id']),
       userName: _readString(json['username']) ??
           _readString(json['name']) ??
-          'User ${_readInt(json['id'])}',
+          'Пользователь #${_readInt(json['id'])}',
       alias: _readString(json['alias']),
       title: _readString(json['title']),
     );
@@ -698,10 +778,13 @@ class KimaiTimesheetDto {
     required this.durationSeconds,
     this.projectId,
     this.projectName,
+    this.projectCustomerName,
     this.userId,
     this.userName,
     this.userAlias,
+    this.userDisplayName,
     this.userTitle,
+    this.activityId,
     this.activityName,
     this.description,
     this.endAt,
@@ -710,16 +793,22 @@ class KimaiTimesheetDto {
     this.currency,
     this.exported = false,
     this.tags,
+    this.rawKeys = const [],
+    this.tagSourceKeys = const [],
+    this.unknownTagShape,
     this.updatedAt,
   });
 
   final int id;
   final int? projectId;
   final String? projectName;
+  final String? projectCustomerName;
   final int? userId;
   final String? userName;
   final String? userAlias;
+  final String? userDisplayName;
   final String? userTitle;
+  final int? activityId;
   final String? activityName;
   final String? description;
   final DateTime beginAt;
@@ -730,12 +819,16 @@ class KimaiTimesheetDto {
   final String? currency;
   final bool exported;
   final String? tags;
+  final List<String> rawKeys;
+  final List<String> tagSourceKeys;
+  final String? unknownTagShape;
   final DateTime? updatedAt;
 
   factory KimaiTimesheetDto.fromJson(Map<String, Object?> json) {
     final project = json['project'];
     final activity = json['activity'];
     final user = json['user'];
+    final tags = _readTimesheetTags(json);
 
     return KimaiTimesheetDto(
       id: _readInt(json['id']),
@@ -745,6 +838,9 @@ class KimaiTimesheetDto {
       projectName: project is Map<String, Object?>
           ? _readString(project['name'])
           : _readString(json['projectName']),
+      projectCustomerName: project is Map<String, Object?>
+          ? _readNestedString(project['customer'], const ['name'])
+          : _readString(json['customerName']),
       userId: user is Map<String, Object?>
           ? _readNullableInt(user['id'])
           : _readNullableInt(json['user']),
@@ -753,8 +849,14 @@ class KimaiTimesheetDto {
           : _readString(json['userName']) ?? _readString(json['username']),
       userAlias:
           user is Map<String, Object?> ? _readString(user['alias']) : null,
+      userDisplayName: user is Map<String, Object?>
+          ? _readString(user['displayName'])
+          : _readString(json['displayName']),
       userTitle:
           user is Map<String, Object?> ? _readString(user['title']) : null,
+      activityId: activity is Map<String, Object?>
+          ? _readNullableInt(activity['id'])
+          : _readNullableInt(json['activity']),
       activityName: activity is Map<String, Object?>
           ? _readString(activity['name'])
           : _readString(json['activityName']),
@@ -767,7 +869,10 @@ class KimaiTimesheetDto {
       hourlyRate: _readDouble(json['hourlyRate']),
       currency: _readString(json['currency']),
       exported: _readBool(json['exported']),
-      tags: _readTags(json['tags']),
+      tags: tags.tags,
+      rawKeys: _sanitizedKeys(json),
+      tagSourceKeys: tags.sourceKeys,
+      unknownTagShape: tags.unknownShape,
       // TODO: Confirm timesheet update field for the target Kimai version.
       updatedAt: _readDateTime(json['updatedAt']),
     );
@@ -814,12 +919,27 @@ String? _readString(Object? value) {
   return null;
 }
 
+String? _readNestedString(Object? value, List<String> keys) {
+  if (value is! Map<String, Object?>) {
+    return null;
+  }
+
+  for (final key in keys) {
+    final result = _readString(value[key]);
+    if (result != null) {
+      return result;
+    }
+  }
+
+  return null;
+}
+
 String _readDisplayName(Map<String, Object?> json) {
   return _readString(json['alias']) ??
       _readString(json['title']) ??
       _readString(json['username']) ??
       _readString(json['name']) ??
-      'User ${_readInt(json['id'])}';
+      'Пользователь #${_readInt(json['id'])}';
 }
 
 List<String> _readStringList(Object? value) {
@@ -850,10 +970,49 @@ DateTime? _readDateTime(Object? value) {
   return null;
 }
 
-String? _readTags(Object? value) {
-  if (value is List) {
-    return value.whereType<Object>().map((item) => item.toString()).join(',');
+({String? tags, List<String> sourceKeys, String? unknownShape})
+    _readTimesheetTags(
+  Map<String, Object?> json,
+) {
+  final sourceKeys = <String>[];
+  final tags = <String>[];
+  String? unknownShape;
+
+  void readKey(String key) {
+    if (!json.containsKey(key)) {
+      return;
+    }
+    sourceKeys.add(key);
+    final value = json[key];
+    final parsed = parseTags(value);
+    tags.addAll(parsed);
+    if (parsed.isEmpty && value != null) {
+      unknownShape ??= '$key=${describeKimaiResponseShape(value)}';
+    }
   }
 
-  return _readString(value);
+  for (final key in const ['tags', 'tagNames', 'tag', 'meta']) {
+    readKey(key);
+  }
+
+  return (
+    tags: formatTags(tags),
+    sourceKeys: sourceKeys,
+    unknownShape: unknownShape,
+  );
+}
+
+List<String> _sanitizedKeys(Map<String, Object?> json) {
+  const sensitive = {
+    'token',
+    'apiToken',
+    'password',
+    'Authorization',
+    'authorization',
+  };
+
+  return [
+    for (final key in json.keys)
+      if (!sensitive.contains(key)) key,
+  ]..sort();
 }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/export/export_file_saver.dart';
+import '../../../core/export/report_file_exporter.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_time_formats.dart';
 import '../../../core/widgets/app_screen.dart';
@@ -23,6 +25,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   int? _projectId;
   int? _userId;
   String _activity = '';
+  String _tag = '';
+  String _searchText = '';
   bool _includeDetails = true;
   ReportSortField _sortField = ReportSortField.user;
   bool _sortAscending = true;
@@ -46,17 +50,17 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
     return AppScreen(
       title: 'Отчёты',
-      subtitle: 'Детализация времени по проекту, периоду и людям из Kimai.',
+      subtitle: 'Детализация времени по проектам, периоду, людям и меткам.',
       actions: [
         OutlinedButton.icon(
-          onPressed: _result == null ? null : _exportSummaryCsv,
-          icon: const Icon(Icons.summarize_rounded, size: 18),
-          label: const Text('CSV сводка'),
+          onPressed: _result == null ? null : () => _exportCsv(_result!),
+          icon: const Icon(Icons.table_view_rounded, size: 18),
+          label: const Text('CSV'),
         ),
         OutlinedButton.icon(
-          onPressed: _result == null ? null : _exportDetailsCsv,
+          onPressed: _result == null ? null : () => _exportXlsx(_result!),
           icon: const Icon(Icons.download_rounded, size: 18),
-          label: const Text('CSV детали'),
+          label: const Text('XLSX'),
         ),
       ],
       children: [
@@ -73,25 +77,22 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             SizedBox(
               width: 280,
               child: projects.when(
-                data: (items) {
-                  _hydrateProject(items);
-                  return DropdownButtonFormField<int>(
-                    initialValue: _projectId,
-                    isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'Проект'),
-                    items: [
-                      for (final project in items)
-                        DropdownMenuItem(
-                          value: project.id,
-                          child: Text(
-                            project.name,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                data: (items) => DropdownButtonFormField<int?>(
+                  initialValue: _projectId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Проект'),
+                  items: [
+                    for (final project in items)
+                      DropdownMenuItem<int?>(
+                        value: project.id,
+                        child: Text(
+                          project.name,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                    ],
-                    onChanged: (value) => setState(() => _projectId = value),
-                  );
-                },
+                      ),
+                  ],
+                  onChanged: (value) => setState(() => _projectId = value),
+                ),
                 loading: () => const LinearProgressIndicator(),
                 error: (error, stackTrace) => Text(error.toString()),
               ),
@@ -132,13 +133,33 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               ),
             ),
             SizedBox(
-              width: 220,
+              width: 180,
               child: TextField(
                 decoration: const InputDecoration(
                   labelText: 'Активность',
-                  prefixIcon: Icon(Icons.search_rounded, size: 18),
+                  prefixIcon: Icon(Icons.work_outline_rounded, size: 18),
                 ),
                 onChanged: (value) => setState(() => _activity = value),
+              ),
+            ),
+            SizedBox(
+              width: 180,
+              child: TextField(
+                decoration: const InputDecoration(
+                  labelText: 'Метки',
+                  prefixIcon: Icon(Icons.sell_outlined, size: 18),
+                ),
+                onChanged: (value) => setState(() => _tag = value),
+              ),
+            ),
+            SizedBox(
+              width: 220,
+              child: TextField(
+                decoration: const InputDecoration(
+                  labelText: 'Поиск',
+                  prefixIcon: Icon(Icons.search_rounded, size: 18),
+                ),
+                onChanged: (value) => setState(() => _searchText = value),
               ),
             ),
             SizedBox(
@@ -153,8 +174,20 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     child: Text('Пользователь'),
                   ),
                   DropdownMenuItem(
+                    value: ReportSortField.project,
+                    child: Text('Проект'),
+                  ),
+                  DropdownMenuItem(
+                    value: ReportSortField.activity,
+                    child: Text('Активность'),
+                  ),
+                  DropdownMenuItem(
                     value: ReportSortField.duration,
                     child: Text('Время'),
+                  ),
+                  DropdownMenuItem(
+                    value: ReportSortField.minutes,
+                    child: Text('Минуты'),
                   ),
                   DropdownMenuItem(
                     value: ReportSortField.amount,
@@ -197,7 +230,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               avatar: const Icon(Icons.list_alt_rounded, size: 18),
             ),
             FilledButton.icon(
-              onPressed: _loading || _projectId == null ? null : _loadReport,
+              onPressed: _loading ? null : _loadReport,
               icon: _loading
                   ? const SizedBox.square(
                       dimension: 18,
@@ -216,8 +249,15 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           ),
         if (_result != null) ReportWarningsPanel(result: _result!),
         if (_result != null)
-          ReportSummaryTable(
+          ReportUserSummaryTable(
             items: _result!.userSummaries,
+            sortField: _sortField,
+            sortAscending: _sortAscending,
+            onSort: _onSort,
+          ),
+        if (_result != null)
+          ReportProjectSummaryTable(
+            items: _result!.projectSummaries,
             sortField: _sortField,
             sortAscending: _sortAscending,
             onSort: _onSort,
@@ -232,18 +272,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         if (_result == null && !_loading && _error == null)
           const EmptyState(
             title: 'Отчёт ещё не сформирован',
-            message: 'Выберите проект и период, затем сформируйте отчёт.',
+            message: 'Выберите фильтры и сформируйте отчёт.',
           ),
       ],
     );
-  }
-
-  void _hydrateProject(List<ReportProjectOption> projects) {
-    if (_projectId != null || projects.isEmpty) {
-      return;
-    }
-
-    _projectId = projects.first.id;
   }
 
   Future<void> _pickDateRange() async {
@@ -272,11 +304,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   }
 
   Future<void> _loadReport() async {
-    final projectId = _projectId;
-    if (projectId == null) {
-      return;
-    }
-
     setState(() {
       _loading = true;
       _error = null;
@@ -286,11 +313,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       final repository = await ref.read(reportsRepositoryProvider.future);
       final result = await repository.buildReport(
         ReportQuery(
-          projectId: projectId,
+          projectId: _projectId,
           begin: _begin,
           end: _end,
           userId: _userId,
           activity: _activity,
+          tag: _tag,
+          searchText: _searchText,
           sortField: _sortField,
           sortAscending: _sortAscending,
         ),
@@ -322,46 +351,104 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     }
   }
 
-  Future<void> _exportSummaryCsv() async {
-    final result = _result;
-    if (result == null) {
+  Future<void> _exportCsv(ReportResult result) async {
+    final bytes = buildCsvBytes(_detailsRows(result));
+    await _saveExport(
+      fileName: _fileName('csv'),
+      bytes: bytes,
+      mimeType: 'text/csv',
+    );
+  }
+
+  Future<void> _exportXlsx(ReportResult result) async {
+    final bytes = buildXlsxBytes([
+      ExportSheet(name: 'Summary by users', rows: _userSummaryRows(result)),
+      ExportSheet(
+        name: 'Summary by projects',
+        rows: _projectSummaryRows(result),
+      ),
+      ExportSheet(name: 'Details', rows: _detailsRows(result)),
+    ]);
+    await _saveExport(
+      fileName: _fileName('xlsx'),
+      bytes: bytes,
+      mimeType:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+  }
+
+  Future<void> _saveExport({
+    required String fileName,
+    required Uint8List bytes,
+    required String mimeType,
+  }) async {
+    final result = await saveOrShareExportFile(
+      fileName: fileName,
+      bytes: bytes,
+      mimeType: mimeType,
+    );
+    if (!mounted || result == null) {
       return;
     }
 
-    final rows = <List<String>>[
-      ['Пользователь', 'Минуты', 'Длительность', 'Записей', 'Сумма'],
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result.shared
+              ? 'Файл отчёта готов к отправке'
+              : 'Файл отчёта сохранён',
+        ),
+      ),
+    );
+  }
+
+  List<List<Object?>> _userSummaryRows(ReportResult result) {
+    return [
+      ['Пользователь', 'Проекты', 'Время', 'Минуты', 'Записей', 'Сумма'],
       for (final item in result.userSummaries)
         [
           item.userName,
-          item.totalMinutes.toString(),
+          item.projectNames.join(', '),
           formatDurationSeconds(item.totalDurationSeconds),
-          item.entriesCount.toString(),
+          item.totalMinutes,
+          item.entriesCount,
           item.totalAmountMinor == 0
-              ? ''
+              ? null
               : (item.totalAmountMinor / 100).toStringAsFixed(2),
         ],
     ];
-
-    await _copyCsv(rows, 'CSV сводки скопирован');
   }
 
-  Future<void> _exportDetailsCsv() async {
-    final result = _result;
-    if (result == null) {
-      return;
-    }
+  List<List<Object?>> _projectSummaryRows(ReportResult result) {
+    return [
+      ['Проект', 'Пользователей', 'Время', 'Минуты', 'Записей', 'Сумма'],
+      for (final item in result.projectSummaries)
+        [
+          item.projectName,
+          item.userCount,
+          formatDurationSeconds(item.totalDurationSeconds),
+          item.totalMinutes,
+          item.entriesCount,
+          item.totalAmountMinor == 0
+              ? null
+              : (item.totalAmountMinor / 100).toStringAsFixed(2),
+        ],
+    ];
+  }
 
-    final rows = <List<String>>[
+  List<List<Object?>> _detailsRows(ReportResult result) {
+    return [
       [
         'Дата',
         'Пользователь',
         'Проект',
         'Активность',
+        'Метки',
         'Описание',
         'Начало',
         'Конец',
-        'Минуты',
         'Длительность',
+        'Минуты',
         'Сумма',
       ],
       for (final entry in result.entries)
@@ -370,46 +457,41 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           entry.userName,
           entry.projectName,
           entry.activity,
+          entry.tags,
           entry.description,
           DateTimeFormats.time.format(entry.begin.toLocal()),
           entry.end == null
               ? ''
               : DateTimeFormats.time.format(entry.end!.toLocal()),
-          entry.durationMinutes.toString(),
           entry.durationHuman,
+          entry.durationMinutes,
           entry.amountMinor == null
-              ? ''
+              ? null
               : (entry.amountMinor! / 100).toStringAsFixed(2),
         ],
     ];
-
-    await _copyCsv(rows, 'CSV деталей скопирован');
   }
 
-  Future<void> _copyCsv(List<List<String>> rows, String message) async {
-    final csv = rows.map((row) => row.map(_escapeCsv).join(',')).join('\n');
-    await Clipboard.setData(ClipboardData(text: '\uFEFF$csv'));
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$message: ${rows.length - 1} строк')),
-      );
-    }
+  String _fileName(String extension) {
+    final project = _projectId == null ? 'all' : 'project_$_projectId';
+    final from = DateTimeFormats.compactDate.format(_begin);
+    final to = DateTimeFormats.compactDate.format(
+      _end.subtract(const Duration(days: 1)),
+    );
+
+    return 'outstaff_report_${_safeFilePart(project)}_${_safeFilePart(from)}_${_safeFilePart(to)}.$extension';
   }
 
-  String _escapeCsv(String value) {
-    final escaped = value.replaceAll('"', '""');
-    if (escaped.contains(',') ||
-        escaped.contains('\n') ||
-        escaped.contains('"')) {
-      return '"$escaped"';
-    }
-
-    return escaped;
+  String _safeFilePart(String value) {
+    return value.replaceAll(RegExp(r'[^A-Za-zА-Яа-я0-9._-]+'), '_');
   }
 
   ReportSortField _sortFieldFromKey(String key) {
     return switch (key) {
+      'project' => ReportSortField.project,
+      'activity' => ReportSortField.activity,
       'duration' => ReportSortField.duration,
+      'minutes' => ReportSortField.minutes,
       'amount' => ReportSortField.amount,
       'date' => ReportSortField.date,
       'entries' => ReportSortField.entriesCount,
@@ -482,6 +564,10 @@ class ReportWarningsPanel extends StatelessWidget {
                 value: result.userSummaries.length.toString(),
               ),
               _TotalItem(
+                label: 'Проектов',
+                value: result.projectSummaries.length.toString(),
+              ),
+              _TotalItem(
                 label: 'Записей',
                 value: result.entries.length.toString(),
               ),
@@ -510,19 +596,14 @@ class ReportWarningsPanel extends StatelessWidget {
             for (final warning in result.warnings)
               Text(warning, style: const TextStyle(color: AppColors.warning)),
           ],
-          const SizedBox(height: 8),
-          Text(
-            'XLSX: TODO после CSV-экспорта, чтобы не добавлять зависимость без необходимости.',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
         ],
       ),
     );
   }
 }
 
-class ReportSummaryTable extends StatelessWidget {
-  const ReportSummaryTable({
+class ReportUserSummaryTable extends StatelessWidget {
+  const ReportUserSummaryTable({
     required this.items,
     required this.sortField,
     required this.sortAscending,
@@ -553,6 +634,15 @@ class ReportSummaryTable extends StatelessWidget {
           ),
         ),
         AppTableColumn(
+          key: 'project',
+          label: 'Проекты',
+          width: 260,
+          cellBuilder: (context, item) => Text(
+            item.projectNames.join(', '),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        AppTableColumn(
           key: 'duration',
           label: 'Время',
           width: 120,
@@ -564,7 +654,6 @@ class ReportSummaryTable extends StatelessWidget {
           key: 'minutes',
           label: 'Минуты',
           width: 90,
-          sortable: false,
           numeric: true,
           cellBuilder: (context, item) => Text(item.totalMinutes.toString()),
         ),
@@ -587,13 +676,109 @@ class ReportSummaryTable extends StatelessWidget {
           ),
         ),
       ],
-      emptyTitle: 'Сводка пуста',
+      emptyTitle: 'Сводка по пользователям пуста',
       emptyMessage: 'Kimai не вернул записей по выбранным фильтрам.',
       mobileCardBuilder: (context, item) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(item.userName, style: Theme.of(context).textTheme.titleMedium),
+          Text(item.projectNames.join(', '), overflow: TextOverflow.ellipsis),
           Text(formatDurationSeconds(item.totalDurationSeconds)),
+          Text('Записей: ${item.entriesCount}'),
+          Text(
+            item.totalAmountMinor == 0
+                ? '-'
+                : formatMoneyRub(item.totalAmountMinor),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ReportProjectSummaryTable extends StatelessWidget {
+  const ReportProjectSummaryTable({
+    required this.items,
+    required this.sortField,
+    required this.sortAscending,
+    required this.onSort,
+    super.key,
+  });
+
+  final List<ProjectReportSummary> items;
+  final ReportSortField sortField;
+  final bool sortAscending;
+  final void Function(String key, bool ascending) onSort;
+
+  @override
+  Widget build(BuildContext context) {
+    return ResponsiveDataTable<ProjectReportSummary>(
+      items: items,
+      sortColumnKey: _sortKey(sortField),
+      sortAscending: sortAscending,
+      onSort: onSort,
+      columns: [
+        AppTableColumn(
+          key: 'project',
+          label: 'Проект',
+          width: 260,
+          cellBuilder: (context, item) => Text(
+            item.projectName,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        AppTableColumn(
+          key: 'user',
+          label: 'Пользователей',
+          width: 130,
+          numeric: true,
+          cellBuilder: (context, item) => Text(item.userCount.toString()),
+        ),
+        AppTableColumn(
+          key: 'duration',
+          label: 'Время',
+          width: 120,
+          cellBuilder: (context, item) => Text(
+            formatDurationSeconds(item.totalDurationSeconds),
+          ),
+        ),
+        AppTableColumn(
+          key: 'minutes',
+          label: 'Минуты',
+          width: 90,
+          numeric: true,
+          cellBuilder: (context, item) => Text(item.totalMinutes.toString()),
+        ),
+        AppTableColumn(
+          key: 'entries',
+          label: 'Записей',
+          width: 90,
+          numeric: true,
+          cellBuilder: (context, item) => Text(item.entriesCount.toString()),
+        ),
+        AppTableColumn(
+          key: 'amount',
+          label: 'Сумма',
+          width: 120,
+          numeric: true,
+          cellBuilder: (context, item) => Text(
+            item.totalAmountMinor == 0
+                ? '-'
+                : formatMoneyRub(item.totalAmountMinor),
+          ),
+        ),
+      ],
+      emptyTitle: 'Сводка по проектам пуста',
+      emptyMessage: 'Kimai не вернул записей по выбранным фильтрам.',
+      mobileCardBuilder: (context, item) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            item.projectName,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          Text(formatDurationSeconds(item.totalDurationSeconds)),
+          Text('Пользователей: ${item.userCount}'),
           Text('Записей: ${item.entriesCount}'),
           Text(
             item.totalAmountMinor == 0
@@ -649,7 +834,6 @@ class ReportDetailsTable extends StatelessWidget {
           key: 'project',
           label: 'Проект',
           width: 180,
-          sortable: false,
           cellBuilder: (context, item) => Text(
             item.projectName,
             overflow: TextOverflow.ellipsis,
@@ -659,11 +843,17 @@ class ReportDetailsTable extends StatelessWidget {
           key: 'activity',
           label: 'Активность',
           width: 160,
-          sortable: false,
           cellBuilder: (context, item) => Text(
-            item.activity.isEmpty ? '-' : item.activity,
+            item.activity,
             overflow: TextOverflow.ellipsis,
           ),
+        ),
+        AppTableColumn(
+          key: 'tags',
+          label: 'Метки',
+          width: 180,
+          sortable: false,
+          cellBuilder: (context, item) => _TagText(value: item.tags),
         ),
         AppTableColumn(
           key: 'description',
@@ -705,6 +895,13 @@ class ReportDetailsTable extends StatelessWidget {
           cellBuilder: (context, item) => Text(item.durationHuman),
         ),
         AppTableColumn(
+          key: 'minutes',
+          label: 'Минуты',
+          width: 90,
+          numeric: true,
+          cellBuilder: (context, item) => Text(item.durationMinutes.toString()),
+        ),
+        AppTableColumn(
           key: 'amount',
           label: 'Сумма',
           width: 110,
@@ -725,7 +922,8 @@ class ReportDetailsTable extends StatelessWidget {
             '${DateTimeFormats.date.format(item.begin.toLocal())} '
             '${DateTimeFormats.time.format(item.begin.toLocal())}',
           ),
-          if (item.activity.isNotEmpty) Text(item.activity),
+          Text(item.activity),
+          _TagText(value: item.tags),
           if (item.description.isNotEmpty)
             Text(item.description, overflow: TextOverflow.ellipsis),
           Text(
@@ -733,6 +931,24 @@ class ReportDetailsTable extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _TagText extends StatelessWidget {
+  const _TagText({required this.value});
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    if (value.trim().isEmpty) {
+      return const Text('-');
+    }
+
+    return Tooltip(
+      message: value,
+      child: Text(value, overflow: TextOverflow.ellipsis),
     );
   }
 }
@@ -783,7 +999,10 @@ class _CopyErrorButton extends StatelessWidget {
 
 String _sortKey(ReportSortField field) {
   return switch (field) {
+    ReportSortField.project => 'project',
+    ReportSortField.activity => 'activity',
     ReportSortField.duration => 'duration',
+    ReportSortField.minutes => 'minutes',
     ReportSortField.amount => 'amount',
     ReportSortField.date => 'date',
     ReportSortField.entriesCount => 'entries',

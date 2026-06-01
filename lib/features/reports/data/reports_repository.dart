@@ -5,6 +5,7 @@ import '../../../core/db/app_database.dart';
 import '../../../core/network/kimai_api_client.dart';
 import '../../../core/network/network_providers.dart';
 import '../../../core/utils/date_time_formats.dart';
+import '../../../core/utils/tags.dart';
 import '../../settings/data/settings_repository.dart';
 
 enum AppMode {
@@ -19,7 +20,10 @@ enum AppMode {
 
 enum ReportSortField {
   user,
+  project,
+  activity,
   duration,
+  minutes,
   amount,
   date,
   entriesCount;
@@ -31,7 +35,7 @@ class ReportProjectOption {
     required this.name,
   });
 
-  final int id;
+  final int? id;
   final String name;
 }
 
@@ -64,20 +68,24 @@ class ReportAccessInfo {
 
 class ReportQuery {
   const ReportQuery({
-    required this.projectId,
     required this.begin,
     required this.end,
+    this.projectId,
     this.userId,
     this.activity,
+    this.tag,
+    this.searchText,
     this.sortField = ReportSortField.user,
     this.sortAscending = true,
   });
 
-  final int projectId;
+  final int? projectId;
   final DateTime begin;
   final DateTime end;
   final int? userId;
   final String? activity;
+  final String? tag;
+  final String? searchText;
   final ReportSortField sortField;
   final bool sortAscending;
 }
@@ -89,6 +97,7 @@ class ReportTimesheetEntry {
     required this.projectId,
     required this.projectName,
     required this.activity,
+    required this.tags,
     required this.description,
     required this.begin,
     required this.end,
@@ -103,6 +112,7 @@ class ReportTimesheetEntry {
   final int? projectId;
   final String projectName;
   final String activity;
+  final String tags;
   final String description;
   final DateTime begin;
   final DateTime? end;
@@ -117,12 +127,32 @@ class ReportTimesheetEntry {
 class UserReportSummary {
   const UserReportSummary({
     required this.userName,
+    required this.projectNames,
     required this.totalDurationSeconds,
     required this.totalAmountMinor,
     required this.entriesCount,
   });
 
   final String userName;
+  final List<String> projectNames;
+  final int totalDurationSeconds;
+  final int totalAmountMinor;
+  final int entriesCount;
+
+  int get totalMinutes => (totalDurationSeconds / 60).round();
+}
+
+class ProjectReportSummary {
+  const ProjectReportSummary({
+    required this.projectName,
+    required this.userCount,
+    required this.totalDurationSeconds,
+    required this.totalAmountMinor,
+    required this.entriesCount,
+  });
+
+  final String projectName;
+  final int userCount;
   final int totalDurationSeconds;
   final int totalAmountMinor;
   final int entriesCount;
@@ -134,12 +164,14 @@ class ReportResult {
   const ReportResult({
     required this.entries,
     required this.userSummaries,
+    required this.projectSummaries,
     required this.warnings,
     required this.diagnostics,
   });
 
   final List<ReportTimesheetEntry> entries;
   final List<UserReportSummary> userSummaries;
+  final List<ProjectReportSummary> projectSummaries;
   final List<String> warnings;
   final String diagnostics;
 }
@@ -163,6 +195,7 @@ class ReportsRepository {
         .get();
 
     return [
+      const ReportProjectOption(id: null, name: 'Все проекты'),
       for (final row in rows)
         ReportProjectOption(
           id: row.id,
@@ -221,23 +254,39 @@ class ReportsRepository {
       final entries = result.entries
           .map((item) => _mapEntry(item, fallbackProjectId: query.projectId))
           .where((item) => _matchesActivity(item, query.activity))
+          .where((item) => _matchesTag(item, query.tag))
+          .where((item) => _matchesSearch(item, query.searchText))
           .toList(growable: false);
       final sortedEntries = _sortEntries(entries, query);
-      final summaries = _sortSummaries(_summaries(sortedEntries), query);
+      final userSummaries = _sortUserSummaries(
+        _userSummaries(sortedEntries),
+        query,
+      );
+      final projectSummaries = _sortProjectSummaries(
+        _projectSummaries(sortedEntries),
+        query,
+      );
       final missingAmounts = sortedEntries
           .where(
             (entry) => entry.durationSeconds > 0 && entry.amountMinor == null,
           )
           .length;
+      final missingNames = result.entries.where(_hasMissingName).length;
 
       return ReportResult(
         entries: sortedEntries,
-        userSummaries: summaries,
+        userSummaries: userSummaries,
+        projectSummaries: projectSummaries,
         warnings: [
           if (missingAmounts > 0)
             'Для $missingAmounts записей Kimai не вернул сумму. Ставки пользователей не подставлялись.',
+          if (missingNames > 0)
+            'Для $missingNames записей Kimai не вернул полные имена. Диагностика содержит ключи ответа без чувствительных данных.',
         ],
-        diagnostics: result.toDiagnosticString(),
+        diagnostics: [
+          result.toDiagnosticString(),
+          _missingNameDiagnostics(result.entries),
+        ].where((value) => value.isNotEmpty).join('\n'),
       );
     } on KimaiApiException catch (error) {
       if (error.details.statusCode == 403) {
@@ -261,23 +310,28 @@ class ReportsRepository {
 
   ReportTimesheetEntry _mapEntry(
     KimaiTimesheetDto item, {
-    required int fallbackProjectId,
+    required int? fallbackProjectId,
   }) {
     final userName = item.userAlias ??
-        item.userTitle ??
+        item.userDisplayName ??
         item.userName ??
+        item.userTitle ??
         (item.userId == null
             ? 'Неизвестный пользователь'
-            : 'User ${item.userId}');
+            : 'Пользователь #${item.userId}');
+    final projectId = item.projectId ?? fallbackProjectId;
     final amountMinor = _moneyToMinor(item.rate);
 
     return ReportTimesheetEntry(
       userId: item.userId,
       userName: userName,
-      projectId: item.projectId ?? fallbackProjectId,
-      projectName:
-          item.projectName ?? 'Project ${item.projectId ?? fallbackProjectId}',
-      activity: item.activityName ?? '',
+      projectId: projectId,
+      projectName: _projectName(item, projectId),
+      activity: item.activityName ??
+          (item.activityId == null
+              ? 'Без активности'
+              : 'Активность #${item.activityId}'),
+      tags: item.tags ?? '',
       description: item.description ?? '',
       begin: item.beginAt,
       end: item.endAt,
@@ -286,6 +340,18 @@ class ReportsRepository {
       rateMinor: _moneyToMinor(item.hourlyRate),
       amountMinor: amountMinor,
     );
+  }
+
+  String _projectName(KimaiTimesheetDto item, int? projectId) {
+    final projectName = item.projectName;
+    if (projectName != null && projectName.trim().isNotEmpty) {
+      final customer = item.projectCustomerName;
+      return customer == null || customer.trim().isEmpty
+          ? projectName
+          : '$customer / $projectName';
+    }
+
+    return projectId == null ? 'Неизвестный проект' : 'Проект #$projectId';
   }
 
   bool _matchesActivity(ReportTimesheetEntry item, String? activity) {
@@ -297,7 +363,31 @@ class ReportsRepository {
     return item.activity.toLowerCase().contains(value.toLowerCase());
   }
 
-  List<UserReportSummary> _summaries(List<ReportTimesheetEntry> entries) {
+  bool _matchesTag(ReportTimesheetEntry item, String? tag) {
+    final value = tag?.trim();
+    if (value == null || value.isEmpty) {
+      return true;
+    }
+
+    return tagsContain(item.tags, value);
+  }
+
+  bool _matchesSearch(ReportTimesheetEntry item, String? searchText) {
+    final value = searchText?.trim().toLowerCase();
+    if (value == null || value.isEmpty) {
+      return true;
+    }
+
+    return [
+      item.userName,
+      item.projectName,
+      item.activity,
+      item.tags,
+      item.description,
+    ].any((field) => field.toLowerCase().contains(value));
+  }
+
+  List<UserReportSummary> _userSummaries(List<ReportTimesheetEntry> entries) {
     final grouped = <String, List<ReportTimesheetEntry>>{};
     for (final entry in entries) {
       grouped.putIfAbsent(entry.userName, () => []).add(entry);
@@ -307,6 +397,35 @@ class ReportsRepository {
       for (final entry in grouped.entries)
         UserReportSummary(
           userName: entry.key,
+          projectNames:
+              entry.value.map((item) => item.projectName).toSet().toList()
+                ..sort(),
+          totalDurationSeconds: entry.value.fold(
+            0,
+            (sum, item) => sum + item.durationSeconds,
+          ),
+          totalAmountMinor: entry.value.fold(
+            0,
+            (sum, item) => sum + (item.amountMinor ?? 0),
+          ),
+          entriesCount: entry.value.length,
+        ),
+    ];
+  }
+
+  List<ProjectReportSummary> _projectSummaries(
+    List<ReportTimesheetEntry> entries,
+  ) {
+    final grouped = <String, List<ReportTimesheetEntry>>{};
+    for (final entry in entries) {
+      grouped.putIfAbsent(entry.projectName, () => []).add(entry);
+    }
+
+    return [
+      for (final entry in grouped.entries)
+        ProjectReportSummary(
+          projectName: entry.key,
+          userCount: entry.value.map((item) => item.userName).toSet().length,
           totalDurationSeconds: entry.value.fold(
             0,
             (sum, item) => sum + item.durationSeconds,
@@ -328,8 +447,12 @@ class ReportsRepository {
     sorted.sort((a, b) {
       final result = switch (query.sortField) {
         ReportSortField.user => a.userName.compareTo(b.userName),
+        ReportSortField.project => a.projectName.compareTo(b.projectName),
+        ReportSortField.activity => a.activity.compareTo(b.activity),
         ReportSortField.duration =>
           a.durationSeconds.compareTo(b.durationSeconds),
+        ReportSortField.minutes =>
+          a.durationMinutes.compareTo(b.durationMinutes),
         ReportSortField.amount =>
           (a.amountMinor ?? 0).compareTo(b.amountMinor ?? 0),
         ReportSortField.date => a.begin.compareTo(b.begin),
@@ -342,7 +465,7 @@ class ReportsRepository {
     return sorted;
   }
 
-  List<UserReportSummary> _sortSummaries(
+  List<UserReportSummary> _sortUserSummaries(
     List<UserReportSummary> summaries,
     ReportQuery query,
   ) {
@@ -350,10 +473,13 @@ class ReportsRepository {
     sorted.sort((a, b) {
       final result = switch (query.sortField) {
         ReportSortField.user ||
+        ReportSortField.project ||
+        ReportSortField.activity ||
         ReportSortField.date =>
           a.userName.compareTo(b.userName),
         ReportSortField.duration =>
           a.totalDurationSeconds.compareTo(b.totalDurationSeconds),
+        ReportSortField.minutes => a.totalMinutes.compareTo(b.totalMinutes),
         ReportSortField.amount =>
           a.totalAmountMinor.compareTo(b.totalAmountMinor),
         ReportSortField.entriesCount =>
@@ -364,6 +490,63 @@ class ReportsRepository {
     });
 
     return sorted;
+  }
+
+  List<ProjectReportSummary> _sortProjectSummaries(
+    List<ProjectReportSummary> summaries,
+    ReportQuery query,
+  ) {
+    final sorted = [...summaries];
+    sorted.sort((a, b) {
+      final result = switch (query.sortField) {
+        ReportSortField.project ||
+        ReportSortField.user ||
+        ReportSortField.activity ||
+        ReportSortField.date =>
+          a.projectName.compareTo(b.projectName),
+        ReportSortField.duration =>
+          a.totalDurationSeconds.compareTo(b.totalDurationSeconds),
+        ReportSortField.minutes => a.totalMinutes.compareTo(b.totalMinutes),
+        ReportSortField.amount =>
+          a.totalAmountMinor.compareTo(b.totalAmountMinor),
+        ReportSortField.entriesCount =>
+          a.entriesCount.compareTo(b.entriesCount),
+      };
+
+      return query.sortAscending ? result : -result;
+    });
+
+    return sorted;
+  }
+
+  bool _hasMissingName(KimaiTimesheetDto item) {
+    return item.projectName == null ||
+        (item.userAlias == null &&
+            item.userDisplayName == null &&
+            item.userName == null &&
+            item.userTitle == null) ||
+        item.activityName == null ||
+        item.unknownTagShape != null;
+  }
+
+  String _missingNameDiagnostics(List<KimaiTimesheetDto> entries) {
+    final lines = <String>[];
+    for (final entry in entries.where(_hasMissingName).take(20)) {
+      lines.add(
+        [
+          'timesheet_id=${entry.id}',
+          'keys=${entry.rawKeys.join(',')}',
+          if (entry.tagSourceKeys.isNotEmpty)
+            'tag_keys=${entry.tagSourceKeys.join(',')}',
+          if (entry.unknownTagShape != null)
+            'unknown_tag_shape=${entry.unknownTagShape}',
+        ].join(' '),
+      );
+    }
+
+    return lines.isEmpty
+        ? ''
+        : ['missing_name_diagnostics', ...lines].join('\n');
   }
 }
 

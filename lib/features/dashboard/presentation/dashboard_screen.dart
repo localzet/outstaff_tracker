@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +9,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_time_formats.dart';
 import '../../../core/widgets/app_progress_bar.dart';
 import '../../../core/widgets/app_screen.dart';
+import '../../local_tracking/data/local_tracking_repository.dart';
+import '../../local_tracking/presentation/timer_screen.dart';
 import '../../payments/data/payments_repository.dart';
 import '../../payments/presentation/payments_screen.dart';
 import '../../sync/data/sync_controller.dart';
@@ -24,6 +28,8 @@ class DashboardScreen extends ConsumerWidget {
     final payments = ref.watch(paymentsSnapshotProvider);
     final progressHistory = ref.watch(weeklyProgressHistoryProvider);
     final syncState = ref.watch(syncControllerProvider);
+    final activeEntry = ref.watch(activeTimeEntryProvider);
+    final pendingLocalEntries = ref.watch(pendingLocalEntriesCountProvider);
 
     return AppScreen(
       title: 'Обзор',
@@ -36,6 +42,39 @@ class DashboardScreen extends ConsumerWidget {
         ),
       ],
       children: [
+        activeEntry.when(
+          data: (entry) => DashboardTimerCard(entry: entry),
+          loading: () => const SizedBox.shrink(),
+          error: (error, stackTrace) => const SizedBox.shrink(),
+        ),
+        pendingLocalEntries.when(
+          data: (count) => count == 0
+              ? const SizedBox.shrink()
+              : AppPanel(
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.warning_rounded,
+                        color: AppColors.warning,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Есть неотправленные локальные записи: $count',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () => context.go(TimerScreen.routePath),
+                        icon: const Icon(Icons.sync_rounded, size: 18),
+                        label: const Text('Синхронизация'),
+                      ),
+                    ],
+                  ),
+                ),
+          loading: () => const SizedBox.shrink(),
+          error: (error, stackTrace) => const SizedBox.shrink(),
+        ),
         if (syncState.lastError != null)
           AppPanel(
             child: Column(
@@ -130,6 +169,126 @@ class DashboardScreen extends ConsumerWidget {
         );
       }
     }
+  }
+}
+
+class DashboardTimerCard extends StatefulWidget {
+  const DashboardTimerCard({required this.entry, super.key});
+
+  final ActiveTimeEntry? entry;
+
+  @override
+  State<DashboardTimerCard> createState() => _DashboardTimerCardState();
+}
+
+class _DashboardTimerCardState extends State<DashboardTimerCard> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _tick() {
+    if (mounted && widget.entry != null) {
+      setState(() {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final entry = widget.entry;
+    if (entry == null) {
+      return AppPanel(
+        child: Row(
+          children: [
+            const Icon(Icons.timer_off_rounded, color: AppColors.textMuted),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Таймер не запущен',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            FilledButton.icon(
+              onPressed: () => context.go(TimerScreen.routePath),
+              icon: const Icon(Icons.play_arrow_rounded, size: 18),
+              label: const Text('Запустить'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final seconds = DateTime.now().toUtc().difference(entry.beginAt).inSeconds;
+    final durationSeconds = seconds < 60 ? 60 : seconds;
+
+    return AppPanel(
+      child: Row(
+        children: [
+          const Icon(Icons.timer_rounded, color: AppColors.accent),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.projectName,
+                  style: Theme.of(context).textTheme.titleMedium,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if ((entry.activityName ?? '').isNotEmpty)
+                  Text(
+                    entry.activityName!,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                if ((entry.description ?? '').isNotEmpty)
+                  Text(
+                    entry.description!,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                Text(
+                  'Начало: ${DateTimeFormats.date.format(entry.beginAt.toLocal())} '
+                  '${DateTimeFormats.time.format(entry.beginAt.toLocal())} · '
+                  '${formatDurationSeconds(durationSeconds)}',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                if (!entry.isLocal)
+                  Text(
+                    'Активная запись Kimai',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+              ],
+            ),
+          ),
+          Wrap(
+            spacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => context.go(TimerScreen.routePath),
+                icon: const Icon(Icons.edit_rounded, size: 18),
+                label: Text(entry.isLocal ? 'Изменить' : 'Открыть'),
+              ),
+              if (entry.isLocal)
+                FilledButton.icon(
+                  onPressed: () => context.go(TimerScreen.routePath),
+                  icon: const Icon(Icons.stop_rounded, size: 18),
+                  label: const Text('Стоп'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 

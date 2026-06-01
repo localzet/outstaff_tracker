@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/app_database.dart';
+import '../../local_tracking/data/local_tracking_repository.dart';
 import '../../settings/data/settings_repository.dart';
 
 class PeriodValue {
@@ -341,11 +342,13 @@ class AnalyticsRepository {
           'SELECT COUNT(*) AS c FROM app_projects '
           'UNION ALL SELECT COUNT(*) FROM payout_dates '
           'UNION ALL SELECT COUNT(*) FROM timesheets '
+          'UNION ALL SELECT COUNT(*) FROM local_time_entries '
           'UNION ALL SELECT COUNT(*) FROM sync_state',
           readsFrom: {
             _database.appProjects,
             _database.payoutDates,
             _database.timesheets,
+            _database.localTimeEntries,
             _database.syncState,
           },
         )
@@ -395,18 +398,64 @@ class AnalyticsRepository {
     ]).get();
   }
 
-  Future<List<Timesheet>> _timesheetsInRange(DateTime begin, DateTime end) {
+  Future<List<_TrackedEntry>> _timesheetsInRange(
+    DateTime begin,
+    DateTime end,
+  ) async {
     final query = _database.select(_database.timesheets)
       ..where((table) => table.beginAt.isBiggerOrEqualValue(begin))
       ..where((table) => table.beginAt.isSmallerThanValue(end));
+    final remoteRows = await query.get();
+    final localRows = await (_database.select(_database.localTimeEntries)
+          ..where((table) => table.beginAt.isBiggerOrEqualValue(begin))
+          ..where((table) => table.beginAt.isSmallerThanValue(end))
+          ..where(
+            (table) =>
+                table.status.equals(LocalTimeEntryStatus.running.storageValue) |
+                table.status.equals(
+                  LocalTimeEntryStatus.syncPending.storageValue,
+                ) |
+                table.status.equals(
+                  LocalTimeEntryStatus.syncFailed.storageValue,
+                ) |
+                table.status.equals(LocalTimeEntryStatus.conflict.storageValue),
+          ))
+        .get();
+    final projects = {
+      for (final project in await _database.select(_database.appProjects).get())
+        project.id: project,
+    };
 
-    return query.get();
+    return [
+      for (final row in remoteRows)
+        _TrackedEntry(
+          appProjectId: row.appProjectId,
+          beginAt: row.beginAt,
+          durationSeconds: _remoteDisplayDuration(row),
+          amountMinor: row.endAt == null
+              ? _amountMinor(
+                  durationSeconds: _remoteDisplayDuration(row),
+                  hourlyRateMinor: projects[row.appProjectId]?.hourlyRateMinor,
+                )
+              : row.amountMinor,
+        ),
+      for (final row in localRows)
+        _TrackedEntry(
+          appProjectId: row.projectId,
+          beginAt: row.beginAt,
+          durationSeconds: _localDisplayDuration(row),
+          amountMinor: _amountMinor(
+            durationSeconds: _localDisplayDuration(row),
+            hourlyRateMinor: projects[row.projectId]?.hourlyRateMinor,
+          ),
+        ),
+    ];
   }
 
   ProjectDistributionItem _distributionItem({
     required KimaiProject kimaiProject,
     required AppProject appProject,
-    required List<Timesheet> timesheets,
+    required List<_TrackedEntry> timesheets,
   }) {
     final projectTimesheets = timesheets.where(
       (item) => item.appProjectId == appProject.id,
@@ -429,7 +478,7 @@ class AnalyticsRepository {
   GoalCompletionStat _goalStat({
     required KimaiProject kimaiProject,
     required AppProject appProject,
-    required List<Timesheet> timesheets,
+    required List<_TrackedEntry> timesheets,
   }) {
     final projectSeconds = timesheets
         .where((item) => item.appProjectId == appProject.id)
@@ -446,7 +495,7 @@ class AnalyticsRepository {
   ProjectAverageStat _projectAverageStat({
     required KimaiProject kimaiProject,
     required AppProject appProject,
-    required List<Timesheet> timesheets,
+    required List<_TrackedEntry> timesheets,
     required int weeks,
   }) {
     final projectTimesheets =
@@ -492,9 +541,52 @@ final analyticsSnapshotProvider = StreamProvider<AnalyticsSnapshot>((ref) {
   return ref.watch(analyticsRepositoryProvider).watchSnapshot();
 });
 
+class _TrackedEntry {
+  const _TrackedEntry({
+    required this.appProjectId,
+    required this.beginAt,
+    required this.durationSeconds,
+    required this.amountMinor,
+  });
+
+  final String? appProjectId;
+  final DateTime beginAt;
+  final int durationSeconds;
+  final int? amountMinor;
+}
+
 DateTime _startOfWeek(DateTime value) {
   final day = DateTime(value.year, value.month, value.day);
   return day.subtract(Duration(days: day.weekday - 1));
 }
 
 int mathMax(int a, int b) => a > b ? a : b;
+
+int _remoteDisplayDuration(Timesheet entry) {
+  if (entry.endAt == null) {
+    final seconds = DateTime.now().toUtc().difference(entry.beginAt).inSeconds;
+    return seconds < 60 ? 60 : seconds;
+  }
+
+  return entry.durationSeconds < 60 ? 60 : entry.durationSeconds;
+}
+
+int _localDisplayDuration(LocalTimeEntry entry) {
+  if (entry.status == LocalTimeEntryStatus.running.storageValue) {
+    final seconds = DateTime.now().toUtc().difference(entry.beginAt).inSeconds;
+    return seconds < 60 ? 60 : seconds;
+  }
+
+  return entry.durationSeconds < 60 ? 60 : entry.durationSeconds;
+}
+
+int? _amountMinor({
+  required int durationSeconds,
+  required int? hourlyRateMinor,
+}) {
+  if (hourlyRateMinor == null) {
+    return null;
+  }
+
+  return (durationSeconds * hourlyRateMinor / 3600).round();
+}

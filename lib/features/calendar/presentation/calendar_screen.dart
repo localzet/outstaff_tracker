@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_time_formats.dart';
+import '../../../core/utils/tags.dart';
 import '../../../core/widgets/app_progress_bar.dart';
 import '../../../core/widgets/app_screen.dart';
 import '../../timesheets/data/timesheets_repository.dart';
@@ -127,20 +128,20 @@ class TimelineCalendar extends StatelessWidget {
       for (final day in days)
         day: entries
             .where(
-              (entry) => _isSameDay(entry.timesheet.beginAt.toLocal(), day),
+              (entry) => _isSameDay(entry.beginAt.toLocal(), day),
             )
             .toList(growable: false)
           ..sort(
-            (a, b) => a.timesheet.beginAt.compareTo(b.timesheet.beginAt),
+            (a, b) => a.beginAt.compareTo(b.beginAt),
           ),
     };
     final totalSeconds = entries.fold<int>(
       0,
-      (sum, item) => sum + item.timesheet.durationSeconds,
+      (sum, item) => sum + item.durationSeconds,
     );
     final totalAmountMinor = entries.fold<int>(
       0,
-      (sum, item) => sum + (item.timesheet.amountMinor ?? 0),
+      (sum, item) => sum + (item.amountMinor ?? 0),
     );
 
     return Column(
@@ -232,7 +233,7 @@ class CalendarHeatmap extends StatelessWidget {
       for (final day in days)
         (entriesByDay[day] ?? const <TimesheetEntry>[]).fold<int>(
           0,
-          (sum, entry) => sum + entry.timesheet.durationSeconds,
+          (sum, entry) => sum + entry.durationSeconds,
         ),
     ];
     return AppPanel(
@@ -363,11 +364,11 @@ class DayHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final seconds = entries.fold<int>(
       0,
-      (sum, entry) => sum + entry.timesheet.durationSeconds,
+      (sum, entry) => sum + entry.durationSeconds,
     );
     final amount = entries.fold<int>(
       0,
-      (sum, entry) => sum + (entry.timesheet.amountMinor ?? 0),
+      (sum, entry) => sum + (entry.amountMinor ?? 0),
     );
     final isToday = _isSameDay(day, DateTime.now());
 
@@ -457,9 +458,9 @@ class DayTimelineColumn extends StatelessWidget {
         for (final entry in entries)
           CalendarTimelineEventInput<TimesheetEntry>(
             payload: entry,
-            begin: entry.timesheet.beginAt,
-            end: entry.timesheet.endAt,
-            durationSeconds: entry.timesheet.durationSeconds,
+            begin: entry.beginAt,
+            end: entry.endAt,
+            durationSeconds: entry.durationSeconds,
           ),
       ],
     );
@@ -729,9 +730,8 @@ class TimelineEventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final entry = event.payload;
-    final timesheet = entry.timesheet;
-    final begin = timesheet.beginAt.toLocal();
-    final end = timesheet.endAt?.toLocal();
+    final begin = entry.beginAt.toLocal();
+    final end = entry.endAt?.toLocal();
     final compact = event.height < 54;
     final roomy = event.height >= 88;
 
@@ -782,16 +782,14 @@ class TimelineEventCard extends StatelessWidget {
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                         Text(
-                          formatDurationSeconds(timesheet.durationSeconds),
+                          formatDurationSeconds(entry.durationSeconds),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                         if (roomy)
                           Text(
-                            timesheet.description ??
-                                timesheet.activityName ??
-                                '',
+                            entry.description ?? entry.activityName ?? '',
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.bodySmall,
@@ -848,9 +846,8 @@ class TimesheetDetailDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final timesheet = entry.timesheet;
-    final begin = timesheet.beginAt.toLocal();
-    final end = timesheet.endAt?.toLocal();
+    final begin = entry.beginAt.toLocal();
+    final end = entry.endAt?.toLocal();
 
     return Dialog(
       backgroundColor: AppColors.surface,
@@ -871,14 +868,23 @@ class TimesheetDetailDialog extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 16),
-              _DetailRow(label: 'Kimai id', value: timesheet.id.toString()),
+              _DetailRow(
+                label: 'Kimai id',
+                value: entry.kimaiTimesheetId?.toString() ?? '-',
+              ),
               _DetailRow(
                 label: 'Активность',
-                value: timesheet.activityName ?? '-',
+                value: entry.activityName ?? '-',
               ),
               _DetailRow(
                 label: 'Описание',
-                value: timesheet.description ?? '-',
+                value: entry.description ?? '-',
+              ),
+              _DetailRow(
+                label: 'Метки',
+                value: formatTagsForDisplay(entry.tags).isEmpty
+                    ? '-'
+                    : formatTagsForDisplay(entry.tags),
               ),
               _DetailRow(
                 label: 'Начало',
@@ -893,7 +899,7 @@ class TimesheetDetailDialog extends StatelessWidget {
               ),
               _DetailRow(
                 label: 'Длительность',
-                value: formatDurationSeconds(timesheet.durationSeconds),
+                value: formatDurationSeconds(entry.durationSeconds),
               ),
               _DetailRow(
                 label: 'Ставка',
@@ -903,9 +909,9 @@ class TimesheetDetailDialog extends StatelessWidget {
               ),
               _DetailRow(
                 label: 'Сумма',
-                value: timesheet.amountMinor == null
+                value: entry.amountMinor == null
                     ? '-'
-                    : formatMoneyRub(timesheet.amountMinor!),
+                    : formatMoneyRub(entry.amountMinor!),
               ),
               const SizedBox(height: 16),
               Align(

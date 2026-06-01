@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/app_database.dart';
 import '../../../core/network/kimai_api_client.dart';
+import '../../../core/utils/tags.dart';
+import '../../local_tracking/data/local_tracking_repository.dart';
 
 class TimesheetSummary {
   const TimesheetSummary({
@@ -79,8 +81,11 @@ class WeeklyProjectProgress {
 
 enum TimesheetSortField {
   date,
+  project,
+  activity,
   duration,
-  amount;
+  amount,
+  status;
 }
 
 class TimesheetFilters {
@@ -88,6 +93,7 @@ class TimesheetFilters {
     required this.begin,
     required this.end,
     this.appProjectId,
+    this.tag,
     this.searchText,
     this.sortField = TimesheetSortField.date,
     this.sortAscending = false,
@@ -96,6 +102,7 @@ class TimesheetFilters {
   final DateTime begin;
   final DateTime end;
   final String? appProjectId;
+  final String? tag;
   final String? searchText;
   final TimesheetSortField sortField;
   final bool sortAscending;
@@ -106,6 +113,7 @@ class TimesheetFilters {
         other.begin == begin &&
         other.end == end &&
         other.appProjectId == appProjectId &&
+        other.tag == tag &&
         other.searchText == searchText &&
         other.sortField == sortField &&
         other.sortAscending == sortAscending;
@@ -116,6 +124,7 @@ class TimesheetFilters {
         begin,
         end,
         appProjectId,
+        tag,
         searchText,
         sortField,
         sortAscending,
@@ -124,16 +133,38 @@ class TimesheetFilters {
 
 class TimesheetEntry {
   const TimesheetEntry({
-    required this.timesheet,
+    required this.id,
+    required this.kimaiTimesheetId,
+    required this.appProjectId,
+    required this.activityName,
+    required this.description,
+    required this.beginAt,
+    required this.endAt,
+    required this.durationSeconds,
     required this.projectName,
     required this.projectColor,
     required this.hourlyRateMinor,
+    required this.amountMinor,
+    required this.localStatus,
+    this.tags,
   });
 
-  final Timesheet timesheet;
+  final String id;
+  final int? kimaiTimesheetId;
+  final String? appProjectId;
+  final String? activityName;
+  final String? description;
+  final DateTime beginAt;
+  final DateTime? endAt;
+  final int durationSeconds;
   final String projectName;
   final String? projectColor;
   final int? hourlyRateMinor;
+  final int? amountMinor;
+  final LocalTimeEntryStatus? localStatus;
+  final String? tags;
+
+  bool get isLocal => localStatus != null;
 }
 
 class TimesheetProjectOption {
@@ -253,15 +284,47 @@ class TimesheetsRepository {
   Stream<List<TimesheetEntry>> watchTimesheetsFiltered(
     TimesheetFilters filters,
   ) {
-    return _timesheetsFilteredQuery(filters).watch().map(_mapTimesheetEntries);
+    return _database
+        .customSelect(
+          'SELECT COUNT(*) AS c FROM timesheets '
+          'UNION ALL SELECT COUNT(*) FROM local_time_entries',
+          readsFrom: {_database.timesheets, _database.localTimeEntries},
+        )
+        .watch()
+        .asyncMap((_) => getTimesheetsFiltered(filters));
   }
 
   Future<List<TimesheetEntry>> getTimesheetsFiltered(
     TimesheetFilters filters,
   ) async {
-    final rows = await _timesheetsFilteredQuery(filters).get();
+    final remoteRows = await _timesheetsFilteredQuery(filters).get();
+    final localRows = await _localTimesheetsFilteredQuery(filters).get();
+    final entries = [
+      ..._mapRemoteTimesheetEntries(remoteRows),
+      ..._mapLocalTimesheetEntries(localRows),
+    ];
 
-    return _mapTimesheetEntries(rows);
+    entries.sort((a, b) {
+      final compared = switch (filters.sortField) {
+        TimesheetSortField.date => a.beginAt.compareTo(b.beginAt),
+        TimesheetSortField.project => a.projectName.compareTo(b.projectName),
+        TimesheetSortField.activity => (a.activityName ?? '').compareTo(
+            b.activityName ?? '',
+          ),
+        TimesheetSortField.duration => a.durationSeconds.compareTo(
+            b.durationSeconds,
+          ),
+        TimesheetSortField.amount => (a.amountMinor ?? 0).compareTo(
+            b.amountMinor ?? 0,
+          ),
+        TimesheetSortField.status => (a.localStatus?.storageValue ?? 'kimai')
+            .compareTo(b.localStatus?.storageValue ?? 'kimai'),
+      };
+
+      return filters.sortAscending ? compared : -compared;
+    });
+
+    return entries;
   }
 
   Stream<TimesheetSummary> watchTimesheetTotals(TimesheetFilters filters) {
@@ -269,11 +332,11 @@ class TimesheetsRepository {
       return TimesheetSummary(
         totalSeconds: items.fold(
           0,
-          (sum, item) => sum + item.timesheet.durationSeconds,
+          (sum, item) => sum + item.durationSeconds,
         ),
         amountMinor: items.fold(
           0,
-          (sum, item) => sum + (item.timesheet.amountMinor ?? 0),
+          (sum, item) => sum + (item.amountMinor ?? 0),
         ),
         entryCount: items.length,
       );
@@ -315,39 +378,44 @@ class TimesheetsRepository {
     return activities;
   }
 
-  Stream<TimesheetSummary> watchSummary(DateTime begin, DateTime end) {
-    return watchTimesheetsInRange(begin, end).map((items) {
-      final totalSeconds = items.fold<int>(
-        0,
-        (sum, item) => sum + item.durationSeconds,
-      );
-      final amountMinor = items.fold<int>(
-        0,
-        (sum, item) => sum + (item.amountMinor ?? 0),
-      );
+  Future<List<String>> getAvailableTags() async {
+    final remoteRows = await (_database.selectOnly(_database.timesheets)
+          ..addColumns([_database.timesheets.tags]))
+        .get();
+    final localRows = await (_database.selectOnly(_database.localTimeEntries)
+          ..addColumns([_database.localTimeEntries.tags]))
+        .get();
+    final values = <String>{};
 
-      return TimesheetSummary(
-        totalSeconds: totalSeconds,
-        amountMinor: amountMinor,
-        entryCount: items.length,
-      );
-    });
+    for (final row in remoteRows) {
+      values.addAll(parseTags(row.read(_database.timesheets.tags)));
+    }
+    for (final row in localRows) {
+      values.addAll(parseTags(row.read(_database.localTimeEntries.tags)));
+    }
+
+    return values.toList()..sort();
+  }
+
+  Stream<TimesheetSummary> watchSummary(DateTime begin, DateTime end) {
+    return watchTimesheetsFiltered(
+      TimesheetFilters(begin: begin, end: end),
+    ).map(_summaryFromEntries);
   }
 
   Future<TimesheetSummary> getCurrentWeekSummary() async {
     final range = currentWeekRange();
-    final items = await _timesheetsInRange(range.begin, range.end);
+    final items = await getTimesheetsFiltered(
+      TimesheetFilters(begin: range.begin, end: range.end),
+    );
 
-    return _summaryFromTimesheets(items);
+    return _summaryFromEntries(items);
   }
 
   Stream<TimesheetSummary> watchCurrentWeekSummary() {
     final range = currentWeekRange();
 
-    return watchTimesheetsInRange(
-      range.begin,
-      range.end,
-    ).map(_summaryFromTimesheets);
+    return watchSummary(range.begin, range.end);
   }
 
   Future<List<ProjectWeekSummary>> getProjectWeekSummaries() async {
@@ -360,7 +428,9 @@ class TimesheetsRepository {
         ),
       ),
     ]).get();
-    final timesheets = await _timesheetsInRange(range.begin, range.end);
+    final timesheets = await getTimesheetsFiltered(
+      TimesheetFilters(begin: range.begin, end: range.end),
+    );
 
     return _projectSummaries(rows, timesheets);
   }
@@ -372,11 +442,13 @@ class TimesheetsRepository {
         .customSelect(
           'SELECT COUNT(*) AS c FROM app_projects '
           'UNION ALL SELECT COUNT(*) FROM kimai_projects '
-          'UNION ALL SELECT COUNT(*) FROM timesheets',
+          'UNION ALL SELECT COUNT(*) FROM timesheets '
+          'UNION ALL SELECT COUNT(*) FROM local_time_entries',
           readsFrom: {
             _database.appProjects,
             _database.kimaiProjects,
             _database.timesheets,
+            _database.localTimeEntries,
           },
         )
         .watch()
@@ -389,7 +461,9 @@ class TimesheetsRepository {
               ),
             ),
           ]).get();
-          final timesheets = await _timesheetsInRange(range.begin, range.end);
+          final timesheets = await getTimesheetsFiltered(
+            TimesheetFilters(begin: range.begin, end: range.end),
+          );
 
           return _projectSummaries(rows, timesheets);
         });
@@ -402,11 +476,13 @@ class TimesheetsRepository {
         .customSelect(
           'SELECT COUNT(*) AS c FROM app_projects '
           'UNION ALL SELECT COUNT(*) FROM kimai_projects '
-          'UNION ALL SELECT COUNT(*) FROM timesheets',
+          'UNION ALL SELECT COUNT(*) FROM timesheets '
+          'UNION ALL SELECT COUNT(*) FROM local_time_entries',
           readsFrom: {
             _database.appProjects,
             _database.kimaiProjects,
             _database.timesheets,
+            _database.localTimeEntries,
           },
         )
         .watch()
@@ -429,8 +505,9 @@ class TimesheetsRepository {
         .where((row) => row.readTable(_database.appProjects).enabled)
         .toList(growable: false);
     final begin = current.subtract(Duration(days: 7 * (weeks - 1)));
-    final timesheets =
-        await _timesheetsInRange(begin, current.add(const Duration(days: 7)));
+    final timesheets = await getTimesheetsFiltered(
+      TimesheetFilters(begin: begin, end: current.add(const Duration(days: 7))),
+    );
     final result = <WeeklyProjectProgress>[];
 
     for (var index = 0; index < weeks; index++) {
@@ -678,15 +755,7 @@ class TimesheetsRepository {
     return AmountRepairSummary(projects: summaries);
   }
 
-  Future<List<Timesheet>> _timesheetsInRange(DateTime begin, DateTime end) {
-    final query = _database.select(_database.timesheets)
-      ..where((table) => table.beginAt.isBiggerOrEqualValue(begin))
-      ..where((table) => table.beginAt.isSmallerThanValue(end));
-
-    return query.get();
-  }
-
-  TimesheetSummary _summaryFromTimesheets(List<Timesheet> items) {
+  TimesheetSummary _summaryFromEntries(List<TimesheetEntry> items) {
     return TimesheetSummary(
       totalSeconds: items.fold(0, (sum, item) => sum + item.durationSeconds),
       amountMinor: items.fold(0, (sum, item) => sum + (item.amountMinor ?? 0)),
@@ -696,7 +765,7 @@ class TimesheetsRepository {
 
   List<ProjectWeekSummary> _projectSummaries(
     List<TypedResult> projectRows,
-    List<Timesheet> timesheets,
+    List<TimesheetEntry> timesheets,
   ) {
     return [
       for (final row in projectRows)
@@ -712,7 +781,7 @@ class TimesheetsRepository {
   ProjectWeekSummary _projectSummary(
     KimaiProject kimaiProject,
     AppProject appProject,
-    List<Timesheet> timesheets,
+    List<TimesheetEntry> timesheets,
   ) {
     final projectTimesheets = timesheets
         .where((item) => item.appProjectId == appProject.id)
@@ -762,14 +831,30 @@ class TimesheetsRepository {
       final pattern = '%$escaped%';
       query.where(
         _database.timesheets.activityName.like(pattern) |
-            _database.timesheets.description.like(pattern),
+            _database.timesheets.description.like(pattern) |
+            _database.timesheets.tags.like(pattern) |
+            _database.kimaiProjects.name.like(pattern),
       );
+    }
+
+    final tag = filters.tag?.trim();
+    if (tag != null && tag.isNotEmpty) {
+      final escaped = tag.replaceAll('%', r'\%').replaceAll('_', r'\_');
+      query.where(_database.timesheets.tags.like('%$escaped%'));
     }
 
     query.orderBy([
       switch (filters.sortField) {
         TimesheetSortField.date => OrderingTerm(
             expression: _database.timesheets.beginAt,
+            mode: filters.sortAscending ? OrderingMode.asc : OrderingMode.desc,
+          ),
+        TimesheetSortField.project => OrderingTerm(
+            expression: _database.kimaiProjects.name,
+            mode: filters.sortAscending ? OrderingMode.asc : OrderingMode.desc,
+          ),
+        TimesheetSortField.activity => OrderingTerm(
+            expression: _database.timesheets.activityName,
             mode: filters.sortAscending ? OrderingMode.asc : OrderingMode.desc,
           ),
         TimesheetSortField.duration => OrderingTerm(
@@ -780,26 +865,157 @@ class TimesheetsRepository {
             expression: _database.timesheets.amountMinor,
             mode: filters.sortAscending ? OrderingMode.asc : OrderingMode.desc,
           ),
+        TimesheetSortField.status => OrderingTerm(
+            expression: _database.timesheets.exported,
+            mode: filters.sortAscending ? OrderingMode.asc : OrderingMode.desc,
+          ),
       },
     ]);
 
     return query;
   }
 
-  List<TimesheetEntry> _mapTimesheetEntries(List<TypedResult> rows) {
+  JoinedSelectStatement<HasResultSet, dynamic> _localTimesheetsFilteredQuery(
+    TimesheetFilters filters,
+  ) {
+    final query = _database.select(_database.localTimeEntries).join([
+      leftOuterJoin(
+        _database.appProjects,
+        _database.appProjects.id.equalsExp(
+          _database.localTimeEntries.projectId,
+        ),
+      ),
+      leftOuterJoin(
+        _database.kimaiProjects,
+        _database.kimaiProjects.id.equalsExp(
+          _database.localTimeEntries.kimaiProjectId,
+        ),
+      ),
+    ])
+      ..where(
+        _database.localTimeEntries.beginAt.isBiggerOrEqualValue(filters.begin),
+      )
+      ..where(
+        _database.localTimeEntries.beginAt.isSmallerThanValue(filters.end),
+      )
+      ..where(
+        _database.localTimeEntries.status.equals(
+              LocalTimeEntryStatus.running.storageValue,
+            ) |
+            _database.localTimeEntries.status.equals(
+              LocalTimeEntryStatus.syncPending.storageValue,
+            ) |
+            _database.localTimeEntries.status.equals(
+              LocalTimeEntryStatus.syncFailed.storageValue,
+            ) |
+            _database.localTimeEntries.status.equals(
+              LocalTimeEntryStatus.conflict.storageValue,
+            ),
+      );
+
+    final projectId = filters.appProjectId;
+    if (projectId != null && projectId.isNotEmpty) {
+      query.where(_database.localTimeEntries.projectId.equals(projectId));
+    }
+
+    final search = filters.searchText?.trim();
+    if (search != null && search.isNotEmpty) {
+      final escaped = search.replaceAll('%', r'\%').replaceAll('_', r'\_');
+      final pattern = '%$escaped%';
+      query.where(
+        _database.localTimeEntries.activityName.like(pattern) |
+            _database.localTimeEntries.description.like(pattern) |
+            _database.localTimeEntries.tags.like(pattern) |
+            _database.kimaiProjects.name.like(pattern),
+      );
+    }
+
+    final tag = filters.tag?.trim();
+    if (tag != null && tag.isNotEmpty) {
+      final escaped = tag.replaceAll('%', r'\%').replaceAll('_', r'\_');
+      query.where(_database.localTimeEntries.tags.like('%$escaped%'));
+    }
+
+    return query;
+  }
+
+  List<TimesheetEntry> _mapRemoteTimesheetEntries(List<TypedResult> rows) {
+    return [
+      for (final row in rows) _remoteEntryFromRow(row),
+    ];
+  }
+
+  TimesheetEntry _remoteEntryFromRow(TypedResult row) {
+    final timesheet = row.readTable(_database.timesheets);
+    final durationSeconds = _displayRemoteDuration(timesheet);
+
+    return TimesheetEntry(
+      id: timesheet.id.toString(),
+      kimaiTimesheetId: timesheet.id,
+      appProjectId: timesheet.appProjectId,
+      activityName: timesheet.activityName,
+      description: timesheet.description,
+      beginAt: timesheet.beginAt,
+      endAt: timesheet.endAt,
+      durationSeconds: durationSeconds,
+      projectName: row.readTableOrNull(_database.kimaiProjects)?.name ??
+          row.readTableOrNull(_database.appProjects)?.name ??
+          'Unknown project',
+      projectColor: row.readTableOrNull(_database.appProjects)?.color ??
+          row.readTableOrNull(_database.kimaiProjects)?.color,
+      hourlyRateMinor: _displayRateMinor(
+        durationSeconds: durationSeconds,
+        amountMinor: timesheet.amountMinor,
+      ),
+      amountMinor: timesheet.endAt == null
+          ? calculateTimesheetAmountMinor(
+              durationSeconds: durationSeconds,
+              hourlyRateMinor:
+                  row.readTableOrNull(_database.appProjects)?.hourlyRateMinor,
+            )
+          : timesheet.amountMinor,
+      localStatus: null,
+      tags: timesheet.tags,
+    );
+  }
+
+  List<TimesheetEntry> _mapLocalTimesheetEntries(List<TypedResult> rows) {
     return [
       for (final row in rows)
-        TimesheetEntry(
-          timesheet: row.readTable(_database.timesheets),
-          projectName: row.readTableOrNull(_database.kimaiProjects)?.name ??
-              row.readTableOrNull(_database.appProjects)?.name ??
-              'Unknown project',
-          projectColor: row.readTableOrNull(_database.appProjects)?.color ??
-              row.readTableOrNull(_database.kimaiProjects)?.color,
-          hourlyRateMinor:
-              _displayRateMinor(row.readTable(_database.timesheets)),
+        _localEntryFromRow(
+          row,
+          row.readTable(_database.localTimeEntries),
         ),
     ];
+  }
+
+  TimesheetEntry _localEntryFromRow(TypedResult row, LocalTimeEntry entry) {
+    final amountMinor = calculateTimesheetAmountMinor(
+      durationSeconds: _displayDuration(entry),
+      hourlyRateMinor:
+          row.readTableOrNull(_database.appProjects)?.hourlyRateMinor,
+    );
+
+    return TimesheetEntry(
+      id: entry.id,
+      kimaiTimesheetId: entry.kimaiTimesheetId,
+      appProjectId: entry.projectId,
+      activityName: entry.activityName,
+      description: entry.description,
+      beginAt: entry.beginAt,
+      endAt: entry.endAt,
+      durationSeconds: _displayDuration(entry),
+      projectName: row.readTableOrNull(_database.kimaiProjects)?.name ??
+          row.readTableOrNull(_database.appProjects)?.name ??
+          'Unknown project',
+      projectColor: row.readTableOrNull(_database.appProjects)?.color ??
+          row.readTableOrNull(_database.kimaiProjects)?.color,
+      hourlyRateMinor:
+          row.readTableOrNull(_database.appProjects)?.hourlyRateMinor,
+      amountMinor: amountMinor,
+      localStatus: LocalTimeEntryStatus.fromStorage(entry.status),
+      tags: entry.tags,
+    );
   }
 }
 
@@ -890,11 +1106,31 @@ int? _rateForTimesheet({
   return projectRates.isEmpty ? project.hourlyRateMinor : null;
 }
 
-int? _displayRateMinor(Timesheet timesheet) {
-  final amountMinor = timesheet.amountMinor;
-  if (amountMinor == null || timesheet.durationSeconds <= 0) {
+int? _displayRateMinor({
+  required int durationSeconds,
+  required int? amountMinor,
+}) {
+  if (amountMinor == null || durationSeconds <= 0) {
     return null;
   }
 
-  return (amountMinor * 3600 / timesheet.durationSeconds).round();
+  return (amountMinor * 3600 / durationSeconds).round();
+}
+
+int _displayRemoteDuration(Timesheet entry) {
+  if (entry.endAt == null) {
+    final seconds = DateTime.now().toUtc().difference(entry.beginAt).inSeconds;
+    return seconds < 60 ? 60 : seconds;
+  }
+
+  return entry.durationSeconds < 60 ? 60 : entry.durationSeconds;
+}
+
+int _displayDuration(LocalTimeEntry entry) {
+  if (entry.status == LocalTimeEntryStatus.running.storageValue) {
+    final seconds = DateTime.now().toUtc().difference(entry.beginAt).inSeconds;
+    return seconds < 60 ? 60 : seconds;
+  }
+
+  return entry.durationSeconds < 60 ? 60 : entry.durationSeconds;
 }

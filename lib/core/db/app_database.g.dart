@@ -1097,6 +1097,302 @@ class KimaiProjectsCompanion extends UpdateCompanion<KimaiProject> {
   }
 }
 
+class $KimaiActivitiesTable extends KimaiActivities
+    with TableInfo<$KimaiActivitiesTable, KimaiActivity> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $KimaiActivitiesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _projectIdMeta =
+      const VerificationMeta('projectId');
+  @override
+  late final GeneratedColumn<int> projectId = GeneratedColumn<int>(
+      'project_id', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+      'name', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _visibleMeta =
+      const VerificationMeta('visible');
+  @override
+  late final GeneratedColumn<bool> visible = GeneratedColumn<bool>(
+      'visible', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("visible" IN (0, 1))'),
+      defaultValue: const Constant(true));
+  static const VerificationMeta _syncedAtMeta =
+      const VerificationMeta('syncedAt');
+  @override
+  late final GeneratedColumn<DateTime> syncedAt = GeneratedColumn<DateTime>(
+      'synced_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns =>
+      [id, projectId, name, visible, syncedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'kimai_activities';
+  @override
+  VerificationContext validateIntegrity(Insertable<KimaiActivity> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(_projectIdMeta,
+          projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta));
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+          _nameMeta, name.isAcceptableOrUnknown(data['name']!, _nameMeta));
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('visible')) {
+      context.handle(_visibleMeta,
+          visible.isAcceptableOrUnknown(data['visible']!, _visibleMeta));
+    }
+    if (data.containsKey('synced_at')) {
+      context.handle(_syncedAtMeta,
+          syncedAt.isAcceptableOrUnknown(data['synced_at']!, _syncedAtMeta));
+    } else if (isInserting) {
+      context.missing(_syncedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  KimaiActivity map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return KimaiActivity(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      projectId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}project_id']),
+      name: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}name'])!,
+      visible: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}visible'])!,
+      syncedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}synced_at'])!,
+    );
+  }
+
+  @override
+  $KimaiActivitiesTable createAlias(String alias) {
+    return $KimaiActivitiesTable(attachedDatabase, alias);
+  }
+}
+
+class KimaiActivity extends DataClass implements Insertable<KimaiActivity> {
+  final int id;
+  final int? projectId;
+  final String name;
+  final bool visible;
+  final DateTime syncedAt;
+  const KimaiActivity(
+      {required this.id,
+      this.projectId,
+      required this.name,
+      required this.visible,
+      required this.syncedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    if (!nullToAbsent || projectId != null) {
+      map['project_id'] = Variable<int>(projectId);
+    }
+    map['name'] = Variable<String>(name);
+    map['visible'] = Variable<bool>(visible);
+    map['synced_at'] = Variable<DateTime>(syncedAt);
+    return map;
+  }
+
+  KimaiActivitiesCompanion toCompanion(bool nullToAbsent) {
+    return KimaiActivitiesCompanion(
+      id: Value(id),
+      projectId: projectId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(projectId),
+      name: Value(name),
+      visible: Value(visible),
+      syncedAt: Value(syncedAt),
+    );
+  }
+
+  factory KimaiActivity.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return KimaiActivity(
+      id: serializer.fromJson<int>(json['id']),
+      projectId: serializer.fromJson<int?>(json['projectId']),
+      name: serializer.fromJson<String>(json['name']),
+      visible: serializer.fromJson<bool>(json['visible']),
+      syncedAt: serializer.fromJson<DateTime>(json['syncedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'projectId': serializer.toJson<int?>(projectId),
+      'name': serializer.toJson<String>(name),
+      'visible': serializer.toJson<bool>(visible),
+      'syncedAt': serializer.toJson<DateTime>(syncedAt),
+    };
+  }
+
+  KimaiActivity copyWith(
+          {int? id,
+          Value<int?> projectId = const Value.absent(),
+          String? name,
+          bool? visible,
+          DateTime? syncedAt}) =>
+      KimaiActivity(
+        id: id ?? this.id,
+        projectId: projectId.present ? projectId.value : this.projectId,
+        name: name ?? this.name,
+        visible: visible ?? this.visible,
+        syncedAt: syncedAt ?? this.syncedAt,
+      );
+  KimaiActivity copyWithCompanion(KimaiActivitiesCompanion data) {
+    return KimaiActivity(
+      id: data.id.present ? data.id.value : this.id,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      name: data.name.present ? data.name.value : this.name,
+      visible: data.visible.present ? data.visible.value : this.visible,
+      syncedAt: data.syncedAt.present ? data.syncedAt.value : this.syncedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('KimaiActivity(')
+          ..write('id: $id, ')
+          ..write('projectId: $projectId, ')
+          ..write('name: $name, ')
+          ..write('visible: $visible, ')
+          ..write('syncedAt: $syncedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, projectId, name, visible, syncedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is KimaiActivity &&
+          other.id == this.id &&
+          other.projectId == this.projectId &&
+          other.name == this.name &&
+          other.visible == this.visible &&
+          other.syncedAt == this.syncedAt);
+}
+
+class KimaiActivitiesCompanion extends UpdateCompanion<KimaiActivity> {
+  final Value<int> id;
+  final Value<int?> projectId;
+  final Value<String> name;
+  final Value<bool> visible;
+  final Value<DateTime> syncedAt;
+  const KimaiActivitiesCompanion({
+    this.id = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.visible = const Value.absent(),
+    this.syncedAt = const Value.absent(),
+  });
+  KimaiActivitiesCompanion.insert({
+    this.id = const Value.absent(),
+    this.projectId = const Value.absent(),
+    required String name,
+    this.visible = const Value.absent(),
+    required DateTime syncedAt,
+  })  : name = Value(name),
+        syncedAt = Value(syncedAt);
+  static Insertable<KimaiActivity> custom({
+    Expression<int>? id,
+    Expression<int>? projectId,
+    Expression<String>? name,
+    Expression<bool>? visible,
+    Expression<DateTime>? syncedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (projectId != null) 'project_id': projectId,
+      if (name != null) 'name': name,
+      if (visible != null) 'visible': visible,
+      if (syncedAt != null) 'synced_at': syncedAt,
+    });
+  }
+
+  KimaiActivitiesCompanion copyWith(
+      {Value<int>? id,
+      Value<int?>? projectId,
+      Value<String>? name,
+      Value<bool>? visible,
+      Value<DateTime>? syncedAt}) {
+    return KimaiActivitiesCompanion(
+      id: id ?? this.id,
+      projectId: projectId ?? this.projectId,
+      name: name ?? this.name,
+      visible: visible ?? this.visible,
+      syncedAt: syncedAt ?? this.syncedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<int>(projectId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (visible.present) {
+      map['visible'] = Variable<bool>(visible.value);
+    }
+    if (syncedAt.present) {
+      map['synced_at'] = Variable<DateTime>(syncedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('KimaiActivitiesCompanion(')
+          ..write('id: $id, ')
+          ..write('projectId: $projectId, ')
+          ..write('name: $name, ')
+          ..write('visible: $visible, ')
+          ..write('syncedAt: $syncedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $AppProjectsTable extends AppProjects
     with TableInfo<$AppProjectsTable, AppProject> {
   @override
@@ -3338,6 +3634,791 @@ class TimesheetsCompanion extends UpdateCompanion<Timesheet> {
   }
 }
 
+class $LocalTimeEntriesTable extends LocalTimeEntries
+    with TableInfo<$LocalTimeEntriesTable, LocalTimeEntry> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LocalTimeEntriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+      'id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _kimaiTimesheetIdMeta =
+      const VerificationMeta('kimaiTimesheetId');
+  @override
+  late final GeneratedColumn<int> kimaiTimesheetId = GeneratedColumn<int>(
+      'kimai_timesheet_id', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _projectIdMeta =
+      const VerificationMeta('projectId');
+  @override
+  late final GeneratedColumn<String> projectId = GeneratedColumn<String>(
+      'project_id', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: true,
+      $customConstraints: 'NOT NULL REFERENCES app_projects(id)');
+  static const VerificationMeta _kimaiProjectIdMeta =
+      const VerificationMeta('kimaiProjectId');
+  @override
+  late final GeneratedColumn<int> kimaiProjectId = GeneratedColumn<int>(
+      'kimai_project_id', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: true,
+      $customConstraints: 'NOT NULL REFERENCES kimai_projects(id)');
+  static const VerificationMeta _activityIdMeta =
+      const VerificationMeta('activityId');
+  @override
+  late final GeneratedColumn<int> activityId = GeneratedColumn<int>(
+      'activity_id', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _activityNameMeta =
+      const VerificationMeta('activityName');
+  @override
+  late final GeneratedColumn<String> activityName = GeneratedColumn<String>(
+      'activity_name', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _descriptionMeta =
+      const VerificationMeta('description');
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+      'description', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _tagsMeta = const VerificationMeta('tags');
+  @override
+  late final GeneratedColumn<String> tags = GeneratedColumn<String>(
+      'tags', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _beginAtMeta =
+      const VerificationMeta('beginAt');
+  @override
+  late final GeneratedColumn<DateTime> beginAt = GeneratedColumn<DateTime>(
+      'begin_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _endAtMeta = const VerificationMeta('endAt');
+  @override
+  late final GeneratedColumn<DateTime> endAt = GeneratedColumn<DateTime>(
+      'end_at', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _durationSecondsMeta =
+      const VerificationMeta('durationSeconds');
+  @override
+  late final GeneratedColumn<int> durationSeconds = GeneratedColumn<int>(
+      'duration_seconds', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+      'status', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _syncAttemptsMeta =
+      const VerificationMeta('syncAttempts');
+  @override
+  late final GeneratedColumn<int> syncAttempts = GeneratedColumn<int>(
+      'sync_attempts', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _lastSyncErrorMeta =
+      const VerificationMeta('lastSyncError');
+  @override
+  late final GeneratedColumn<String> lastSyncError = GeneratedColumn<String>(
+      'last_sync_error', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _updatedAtMeta =
+      const VerificationMeta('updatedAt');
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+      'updated_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [
+        id,
+        kimaiTimesheetId,
+        projectId,
+        kimaiProjectId,
+        activityId,
+        activityName,
+        description,
+        tags,
+        beginAt,
+        endAt,
+        durationSeconds,
+        status,
+        syncAttempts,
+        lastSyncError,
+        createdAt,
+        updatedAt
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'local_time_entries';
+  @override
+  VerificationContext validateIntegrity(Insertable<LocalTimeEntry> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('kimai_timesheet_id')) {
+      context.handle(
+          _kimaiTimesheetIdMeta,
+          kimaiTimesheetId.isAcceptableOrUnknown(
+              data['kimai_timesheet_id']!, _kimaiTimesheetIdMeta));
+    }
+    if (data.containsKey('project_id')) {
+      context.handle(_projectIdMeta,
+          projectId.isAcceptableOrUnknown(data['project_id']!, _projectIdMeta));
+    } else if (isInserting) {
+      context.missing(_projectIdMeta);
+    }
+    if (data.containsKey('kimai_project_id')) {
+      context.handle(
+          _kimaiProjectIdMeta,
+          kimaiProjectId.isAcceptableOrUnknown(
+              data['kimai_project_id']!, _kimaiProjectIdMeta));
+    } else if (isInserting) {
+      context.missing(_kimaiProjectIdMeta);
+    }
+    if (data.containsKey('activity_id')) {
+      context.handle(
+          _activityIdMeta,
+          activityId.isAcceptableOrUnknown(
+              data['activity_id']!, _activityIdMeta));
+    }
+    if (data.containsKey('activity_name')) {
+      context.handle(
+          _activityNameMeta,
+          activityName.isAcceptableOrUnknown(
+              data['activity_name']!, _activityNameMeta));
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+          _descriptionMeta,
+          description.isAcceptableOrUnknown(
+              data['description']!, _descriptionMeta));
+    }
+    if (data.containsKey('tags')) {
+      context.handle(
+          _tagsMeta, tags.isAcceptableOrUnknown(data['tags']!, _tagsMeta));
+    }
+    if (data.containsKey('begin_at')) {
+      context.handle(_beginAtMeta,
+          beginAt.isAcceptableOrUnknown(data['begin_at']!, _beginAtMeta));
+    } else if (isInserting) {
+      context.missing(_beginAtMeta);
+    }
+    if (data.containsKey('end_at')) {
+      context.handle(
+          _endAtMeta, endAt.isAcceptableOrUnknown(data['end_at']!, _endAtMeta));
+    }
+    if (data.containsKey('duration_seconds')) {
+      context.handle(
+          _durationSecondsMeta,
+          durationSeconds.isAcceptableOrUnknown(
+              data['duration_seconds']!, _durationSecondsMeta));
+    }
+    if (data.containsKey('status')) {
+      context.handle(_statusMeta,
+          status.isAcceptableOrUnknown(data['status']!, _statusMeta));
+    } else if (isInserting) {
+      context.missing(_statusMeta);
+    }
+    if (data.containsKey('sync_attempts')) {
+      context.handle(
+          _syncAttemptsMeta,
+          syncAttempts.isAcceptableOrUnknown(
+              data['sync_attempts']!, _syncAttemptsMeta));
+    }
+    if (data.containsKey('last_sync_error')) {
+      context.handle(
+          _lastSyncErrorMeta,
+          lastSyncError.isAcceptableOrUnknown(
+              data['last_sync_error']!, _lastSyncErrorMeta));
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(_updatedAtMeta,
+          updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta));
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  LocalTimeEntry map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LocalTimeEntry(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}id'])!,
+      kimaiTimesheetId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}kimai_timesheet_id']),
+      projectId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}project_id'])!,
+      kimaiProjectId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}kimai_project_id'])!,
+      activityId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}activity_id']),
+      activityName: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}activity_name']),
+      description: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}description']),
+      tags: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}tags']),
+      beginAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}begin_at'])!,
+      endAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}end_at']),
+      durationSeconds: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}duration_seconds'])!,
+      status: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}status'])!,
+      syncAttempts: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}sync_attempts'])!,
+      lastSyncError: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}last_sync_error']),
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+      updatedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}updated_at'])!,
+    );
+  }
+
+  @override
+  $LocalTimeEntriesTable createAlias(String alias) {
+    return $LocalTimeEntriesTable(attachedDatabase, alias);
+  }
+}
+
+class LocalTimeEntry extends DataClass implements Insertable<LocalTimeEntry> {
+  final String id;
+  final int? kimaiTimesheetId;
+  final String projectId;
+  final int kimaiProjectId;
+  final int? activityId;
+  final String? activityName;
+  final String? description;
+  final String? tags;
+  final DateTime beginAt;
+  final DateTime? endAt;
+  final int durationSeconds;
+  final String status;
+  final int syncAttempts;
+  final String? lastSyncError;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const LocalTimeEntry(
+      {required this.id,
+      this.kimaiTimesheetId,
+      required this.projectId,
+      required this.kimaiProjectId,
+      this.activityId,
+      this.activityName,
+      this.description,
+      this.tags,
+      required this.beginAt,
+      this.endAt,
+      required this.durationSeconds,
+      required this.status,
+      required this.syncAttempts,
+      this.lastSyncError,
+      required this.createdAt,
+      required this.updatedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    if (!nullToAbsent || kimaiTimesheetId != null) {
+      map['kimai_timesheet_id'] = Variable<int>(kimaiTimesheetId);
+    }
+    map['project_id'] = Variable<String>(projectId);
+    map['kimai_project_id'] = Variable<int>(kimaiProjectId);
+    if (!nullToAbsent || activityId != null) {
+      map['activity_id'] = Variable<int>(activityId);
+    }
+    if (!nullToAbsent || activityName != null) {
+      map['activity_name'] = Variable<String>(activityName);
+    }
+    if (!nullToAbsent || description != null) {
+      map['description'] = Variable<String>(description);
+    }
+    if (!nullToAbsent || tags != null) {
+      map['tags'] = Variable<String>(tags);
+    }
+    map['begin_at'] = Variable<DateTime>(beginAt);
+    if (!nullToAbsent || endAt != null) {
+      map['end_at'] = Variable<DateTime>(endAt);
+    }
+    map['duration_seconds'] = Variable<int>(durationSeconds);
+    map['status'] = Variable<String>(status);
+    map['sync_attempts'] = Variable<int>(syncAttempts);
+    if (!nullToAbsent || lastSyncError != null) {
+      map['last_sync_error'] = Variable<String>(lastSyncError);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  LocalTimeEntriesCompanion toCompanion(bool nullToAbsent) {
+    return LocalTimeEntriesCompanion(
+      id: Value(id),
+      kimaiTimesheetId: kimaiTimesheetId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(kimaiTimesheetId),
+      projectId: Value(projectId),
+      kimaiProjectId: Value(kimaiProjectId),
+      activityId: activityId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(activityId),
+      activityName: activityName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(activityName),
+      description: description == null && nullToAbsent
+          ? const Value.absent()
+          : Value(description),
+      tags: tags == null && nullToAbsent ? const Value.absent() : Value(tags),
+      beginAt: Value(beginAt),
+      endAt:
+          endAt == null && nullToAbsent ? const Value.absent() : Value(endAt),
+      durationSeconds: Value(durationSeconds),
+      status: Value(status),
+      syncAttempts: Value(syncAttempts),
+      lastSyncError: lastSyncError == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastSyncError),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory LocalTimeEntry.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LocalTimeEntry(
+      id: serializer.fromJson<String>(json['id']),
+      kimaiTimesheetId: serializer.fromJson<int?>(json['kimaiTimesheetId']),
+      projectId: serializer.fromJson<String>(json['projectId']),
+      kimaiProjectId: serializer.fromJson<int>(json['kimaiProjectId']),
+      activityId: serializer.fromJson<int?>(json['activityId']),
+      activityName: serializer.fromJson<String?>(json['activityName']),
+      description: serializer.fromJson<String?>(json['description']),
+      tags: serializer.fromJson<String?>(json['tags']),
+      beginAt: serializer.fromJson<DateTime>(json['beginAt']),
+      endAt: serializer.fromJson<DateTime?>(json['endAt']),
+      durationSeconds: serializer.fromJson<int>(json['durationSeconds']),
+      status: serializer.fromJson<String>(json['status']),
+      syncAttempts: serializer.fromJson<int>(json['syncAttempts']),
+      lastSyncError: serializer.fromJson<String?>(json['lastSyncError']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'kimaiTimesheetId': serializer.toJson<int?>(kimaiTimesheetId),
+      'projectId': serializer.toJson<String>(projectId),
+      'kimaiProjectId': serializer.toJson<int>(kimaiProjectId),
+      'activityId': serializer.toJson<int?>(activityId),
+      'activityName': serializer.toJson<String?>(activityName),
+      'description': serializer.toJson<String?>(description),
+      'tags': serializer.toJson<String?>(tags),
+      'beginAt': serializer.toJson<DateTime>(beginAt),
+      'endAt': serializer.toJson<DateTime?>(endAt),
+      'durationSeconds': serializer.toJson<int>(durationSeconds),
+      'status': serializer.toJson<String>(status),
+      'syncAttempts': serializer.toJson<int>(syncAttempts),
+      'lastSyncError': serializer.toJson<String?>(lastSyncError),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  LocalTimeEntry copyWith(
+          {String? id,
+          Value<int?> kimaiTimesheetId = const Value.absent(),
+          String? projectId,
+          int? kimaiProjectId,
+          Value<int?> activityId = const Value.absent(),
+          Value<String?> activityName = const Value.absent(),
+          Value<String?> description = const Value.absent(),
+          Value<String?> tags = const Value.absent(),
+          DateTime? beginAt,
+          Value<DateTime?> endAt = const Value.absent(),
+          int? durationSeconds,
+          String? status,
+          int? syncAttempts,
+          Value<String?> lastSyncError = const Value.absent(),
+          DateTime? createdAt,
+          DateTime? updatedAt}) =>
+      LocalTimeEntry(
+        id: id ?? this.id,
+        kimaiTimesheetId: kimaiTimesheetId.present
+            ? kimaiTimesheetId.value
+            : this.kimaiTimesheetId,
+        projectId: projectId ?? this.projectId,
+        kimaiProjectId: kimaiProjectId ?? this.kimaiProjectId,
+        activityId: activityId.present ? activityId.value : this.activityId,
+        activityName:
+            activityName.present ? activityName.value : this.activityName,
+        description: description.present ? description.value : this.description,
+        tags: tags.present ? tags.value : this.tags,
+        beginAt: beginAt ?? this.beginAt,
+        endAt: endAt.present ? endAt.value : this.endAt,
+        durationSeconds: durationSeconds ?? this.durationSeconds,
+        status: status ?? this.status,
+        syncAttempts: syncAttempts ?? this.syncAttempts,
+        lastSyncError:
+            lastSyncError.present ? lastSyncError.value : this.lastSyncError,
+        createdAt: createdAt ?? this.createdAt,
+        updatedAt: updatedAt ?? this.updatedAt,
+      );
+  LocalTimeEntry copyWithCompanion(LocalTimeEntriesCompanion data) {
+    return LocalTimeEntry(
+      id: data.id.present ? data.id.value : this.id,
+      kimaiTimesheetId: data.kimaiTimesheetId.present
+          ? data.kimaiTimesheetId.value
+          : this.kimaiTimesheetId,
+      projectId: data.projectId.present ? data.projectId.value : this.projectId,
+      kimaiProjectId: data.kimaiProjectId.present
+          ? data.kimaiProjectId.value
+          : this.kimaiProjectId,
+      activityId:
+          data.activityId.present ? data.activityId.value : this.activityId,
+      activityName: data.activityName.present
+          ? data.activityName.value
+          : this.activityName,
+      description:
+          data.description.present ? data.description.value : this.description,
+      tags: data.tags.present ? data.tags.value : this.tags,
+      beginAt: data.beginAt.present ? data.beginAt.value : this.beginAt,
+      endAt: data.endAt.present ? data.endAt.value : this.endAt,
+      durationSeconds: data.durationSeconds.present
+          ? data.durationSeconds.value
+          : this.durationSeconds,
+      status: data.status.present ? data.status.value : this.status,
+      syncAttempts: data.syncAttempts.present
+          ? data.syncAttempts.value
+          : this.syncAttempts,
+      lastSyncError: data.lastSyncError.present
+          ? data.lastSyncError.value
+          : this.lastSyncError,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocalTimeEntry(')
+          ..write('id: $id, ')
+          ..write('kimaiTimesheetId: $kimaiTimesheetId, ')
+          ..write('projectId: $projectId, ')
+          ..write('kimaiProjectId: $kimaiProjectId, ')
+          ..write('activityId: $activityId, ')
+          ..write('activityName: $activityName, ')
+          ..write('description: $description, ')
+          ..write('tags: $tags, ')
+          ..write('beginAt: $beginAt, ')
+          ..write('endAt: $endAt, ')
+          ..write('durationSeconds: $durationSeconds, ')
+          ..write('status: $status, ')
+          ..write('syncAttempts: $syncAttempts, ')
+          ..write('lastSyncError: $lastSyncError, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+      id,
+      kimaiTimesheetId,
+      projectId,
+      kimaiProjectId,
+      activityId,
+      activityName,
+      description,
+      tags,
+      beginAt,
+      endAt,
+      durationSeconds,
+      status,
+      syncAttempts,
+      lastSyncError,
+      createdAt,
+      updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LocalTimeEntry &&
+          other.id == this.id &&
+          other.kimaiTimesheetId == this.kimaiTimesheetId &&
+          other.projectId == this.projectId &&
+          other.kimaiProjectId == this.kimaiProjectId &&
+          other.activityId == this.activityId &&
+          other.activityName == this.activityName &&
+          other.description == this.description &&
+          other.tags == this.tags &&
+          other.beginAt == this.beginAt &&
+          other.endAt == this.endAt &&
+          other.durationSeconds == this.durationSeconds &&
+          other.status == this.status &&
+          other.syncAttempts == this.syncAttempts &&
+          other.lastSyncError == this.lastSyncError &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class LocalTimeEntriesCompanion extends UpdateCompanion<LocalTimeEntry> {
+  final Value<String> id;
+  final Value<int?> kimaiTimesheetId;
+  final Value<String> projectId;
+  final Value<int> kimaiProjectId;
+  final Value<int?> activityId;
+  final Value<String?> activityName;
+  final Value<String?> description;
+  final Value<String?> tags;
+  final Value<DateTime> beginAt;
+  final Value<DateTime?> endAt;
+  final Value<int> durationSeconds;
+  final Value<String> status;
+  final Value<int> syncAttempts;
+  final Value<String?> lastSyncError;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<int> rowid;
+  const LocalTimeEntriesCompanion({
+    this.id = const Value.absent(),
+    this.kimaiTimesheetId = const Value.absent(),
+    this.projectId = const Value.absent(),
+    this.kimaiProjectId = const Value.absent(),
+    this.activityId = const Value.absent(),
+    this.activityName = const Value.absent(),
+    this.description = const Value.absent(),
+    this.tags = const Value.absent(),
+    this.beginAt = const Value.absent(),
+    this.endAt = const Value.absent(),
+    this.durationSeconds = const Value.absent(),
+    this.status = const Value.absent(),
+    this.syncAttempts = const Value.absent(),
+    this.lastSyncError = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LocalTimeEntriesCompanion.insert({
+    required String id,
+    this.kimaiTimesheetId = const Value.absent(),
+    required String projectId,
+    required int kimaiProjectId,
+    this.activityId = const Value.absent(),
+    this.activityName = const Value.absent(),
+    this.description = const Value.absent(),
+    this.tags = const Value.absent(),
+    required DateTime beginAt,
+    this.endAt = const Value.absent(),
+    this.durationSeconds = const Value.absent(),
+    required String status,
+    this.syncAttempts = const Value.absent(),
+    this.lastSyncError = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.rowid = const Value.absent(),
+  })  : id = Value(id),
+        projectId = Value(projectId),
+        kimaiProjectId = Value(kimaiProjectId),
+        beginAt = Value(beginAt),
+        status = Value(status),
+        createdAt = Value(createdAt),
+        updatedAt = Value(updatedAt);
+  static Insertable<LocalTimeEntry> custom({
+    Expression<String>? id,
+    Expression<int>? kimaiTimesheetId,
+    Expression<String>? projectId,
+    Expression<int>? kimaiProjectId,
+    Expression<int>? activityId,
+    Expression<String>? activityName,
+    Expression<String>? description,
+    Expression<String>? tags,
+    Expression<DateTime>? beginAt,
+    Expression<DateTime>? endAt,
+    Expression<int>? durationSeconds,
+    Expression<String>? status,
+    Expression<int>? syncAttempts,
+    Expression<String>? lastSyncError,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (kimaiTimesheetId != null) 'kimai_timesheet_id': kimaiTimesheetId,
+      if (projectId != null) 'project_id': projectId,
+      if (kimaiProjectId != null) 'kimai_project_id': kimaiProjectId,
+      if (activityId != null) 'activity_id': activityId,
+      if (activityName != null) 'activity_name': activityName,
+      if (description != null) 'description': description,
+      if (tags != null) 'tags': tags,
+      if (beginAt != null) 'begin_at': beginAt,
+      if (endAt != null) 'end_at': endAt,
+      if (durationSeconds != null) 'duration_seconds': durationSeconds,
+      if (status != null) 'status': status,
+      if (syncAttempts != null) 'sync_attempts': syncAttempts,
+      if (lastSyncError != null) 'last_sync_error': lastSyncError,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LocalTimeEntriesCompanion copyWith(
+      {Value<String>? id,
+      Value<int?>? kimaiTimesheetId,
+      Value<String>? projectId,
+      Value<int>? kimaiProjectId,
+      Value<int?>? activityId,
+      Value<String?>? activityName,
+      Value<String?>? description,
+      Value<String?>? tags,
+      Value<DateTime>? beginAt,
+      Value<DateTime?>? endAt,
+      Value<int>? durationSeconds,
+      Value<String>? status,
+      Value<int>? syncAttempts,
+      Value<String?>? lastSyncError,
+      Value<DateTime>? createdAt,
+      Value<DateTime>? updatedAt,
+      Value<int>? rowid}) {
+    return LocalTimeEntriesCompanion(
+      id: id ?? this.id,
+      kimaiTimesheetId: kimaiTimesheetId ?? this.kimaiTimesheetId,
+      projectId: projectId ?? this.projectId,
+      kimaiProjectId: kimaiProjectId ?? this.kimaiProjectId,
+      activityId: activityId ?? this.activityId,
+      activityName: activityName ?? this.activityName,
+      description: description ?? this.description,
+      tags: tags ?? this.tags,
+      beginAt: beginAt ?? this.beginAt,
+      endAt: endAt ?? this.endAt,
+      durationSeconds: durationSeconds ?? this.durationSeconds,
+      status: status ?? this.status,
+      syncAttempts: syncAttempts ?? this.syncAttempts,
+      lastSyncError: lastSyncError ?? this.lastSyncError,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (kimaiTimesheetId.present) {
+      map['kimai_timesheet_id'] = Variable<int>(kimaiTimesheetId.value);
+    }
+    if (projectId.present) {
+      map['project_id'] = Variable<String>(projectId.value);
+    }
+    if (kimaiProjectId.present) {
+      map['kimai_project_id'] = Variable<int>(kimaiProjectId.value);
+    }
+    if (activityId.present) {
+      map['activity_id'] = Variable<int>(activityId.value);
+    }
+    if (activityName.present) {
+      map['activity_name'] = Variable<String>(activityName.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
+    if (tags.present) {
+      map['tags'] = Variable<String>(tags.value);
+    }
+    if (beginAt.present) {
+      map['begin_at'] = Variable<DateTime>(beginAt.value);
+    }
+    if (endAt.present) {
+      map['end_at'] = Variable<DateTime>(endAt.value);
+    }
+    if (durationSeconds.present) {
+      map['duration_seconds'] = Variable<int>(durationSeconds.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (syncAttempts.present) {
+      map['sync_attempts'] = Variable<int>(syncAttempts.value);
+    }
+    if (lastSyncError.present) {
+      map['last_sync_error'] = Variable<String>(lastSyncError.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LocalTimeEntriesCompanion(')
+          ..write('id: $id, ')
+          ..write('kimaiTimesheetId: $kimaiTimesheetId, ')
+          ..write('projectId: $projectId, ')
+          ..write('kimaiProjectId: $kimaiProjectId, ')
+          ..write('activityId: $activityId, ')
+          ..write('activityName: $activityName, ')
+          ..write('description: $description, ')
+          ..write('tags: $tags, ')
+          ..write('beginAt: $beginAt, ')
+          ..write('endAt: $endAt, ')
+          ..write('durationSeconds: $durationSeconds, ')
+          ..write('status: $status, ')
+          ..write('syncAttempts: $syncAttempts, ')
+          ..write('lastSyncError: $lastSyncError, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $PaymentsTable extends Payments with TableInfo<$PaymentsTable, Payment> {
   @override
   final GeneratedDatabase attachedDatabase;
@@ -4378,11 +5459,15 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $UsersLocalTable usersLocal = $UsersLocalTable(this);
   late final $SyncStateTable syncState = $SyncStateTable(this);
   late final $KimaiProjectsTable kimaiProjects = $KimaiProjectsTable(this);
+  late final $KimaiActivitiesTable kimaiActivities =
+      $KimaiActivitiesTable(this);
   late final $AppProjectsTable appProjects = $AppProjectsTable(this);
   late final $PayoutDatesTable payoutDates = $PayoutDatesTable(this);
   late final $ProjectRateHistoryTable projectRateHistory =
       $ProjectRateHistoryTable(this);
   late final $TimesheetsTable timesheets = $TimesheetsTable(this);
+  late final $LocalTimeEntriesTable localTimeEntries =
+      $LocalTimeEntriesTable(this);
   late final $PaymentsTable payments = $PaymentsTable(this);
   late final $SyncLogsTable syncLogs = $SyncLogsTable(this);
   @override
@@ -4393,10 +5478,12 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         usersLocal,
         syncState,
         kimaiProjects,
+        kimaiActivities,
         appProjects,
         payoutDates,
         projectRateHistory,
         timesheets,
+        localTimeEntries,
         payments,
         syncLogs
       ];
@@ -4818,6 +5905,23 @@ final class $$KimaiProjectsTableReferences
         manager.$state.copyWith(prefetchedData: cache));
   }
 
+  static MultiTypedResultKey<$LocalTimeEntriesTable, List<LocalTimeEntry>>
+      _localTimeEntriesRefsTable(_$AppDatabase db) =>
+          MultiTypedResultKey.fromTable(db.localTimeEntries,
+              aliasName: $_aliasNameGenerator(
+                  db.kimaiProjects.id, db.localTimeEntries.kimaiProjectId));
+
+  $$LocalTimeEntriesTableProcessedTableManager get localTimeEntriesRefs {
+    final manager = $$LocalTimeEntriesTableTableManager(
+            $_db, $_db.localTimeEntries)
+        .filter((f) => f.kimaiProjectId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache =
+        $_typedResult.readTableOrNull(_localTimeEntriesRefsTable($_db));
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: cache));
+  }
+
   static MultiTypedResultKey<$PaymentsTable, List<Payment>> _paymentsRefsTable(
           _$AppDatabase db) =>
       MultiTypedResultKey.fromTable(db.payments,
@@ -4902,6 +6006,27 @@ class $$KimaiProjectsTableFilterComposer
             $$TimesheetsTableFilterComposer(
               $db: $db,
               $table: $db.timesheets,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
+
+  Expression<bool> localTimeEntriesRefs(
+      Expression<bool> Function($$LocalTimeEntriesTableFilterComposer f) f) {
+    final $$LocalTimeEntriesTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.localTimeEntries,
+        getReferencedColumn: (t) => t.kimaiProjectId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$LocalTimeEntriesTableFilterComposer(
+              $db: $db,
+              $table: $db.localTimeEntries,
               $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
               joinBuilder: joinBuilder,
               $removeJoinBuilderFromRootComposer:
@@ -5043,6 +6168,27 @@ class $$KimaiProjectsTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> localTimeEntriesRefs<T extends Object>(
+      Expression<T> Function($$LocalTimeEntriesTableAnnotationComposer a) f) {
+    final $$LocalTimeEntriesTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.localTimeEntries,
+        getReferencedColumn: (t) => t.kimaiProjectId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$LocalTimeEntriesTableAnnotationComposer(
+              $db: $db,
+              $table: $db.localTimeEntries,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
+
   Expression<T> paymentsRefs<T extends Object>(
       Expression<T> Function($$PaymentsTableAnnotationComposer a) f) {
     final $$PaymentsTableAnnotationComposer composer = $composerBuilder(
@@ -5077,7 +6223,10 @@ class $$KimaiProjectsTableTableManager extends RootTableManager<
     (KimaiProject, $$KimaiProjectsTableReferences),
     KimaiProject,
     PrefetchHooks Function(
-        {bool appProjectsRefs, bool timesheetsRefs, bool paymentsRefs})> {
+        {bool appProjectsRefs,
+        bool timesheetsRefs,
+        bool localTimeEntriesRefs,
+        bool paymentsRefs})> {
   $$KimaiProjectsTableTableManager(_$AppDatabase db, $KimaiProjectsTable table)
       : super(TableManagerState(
           db: db,
@@ -5137,12 +6286,14 @@ class $$KimaiProjectsTableTableManager extends RootTableManager<
           prefetchHooksCallback: (
               {appProjectsRefs = false,
               timesheetsRefs = false,
+              localTimeEntriesRefs = false,
               paymentsRefs = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [
                 if (appProjectsRefs) db.appProjects,
                 if (timesheetsRefs) db.timesheets,
+                if (localTimeEntriesRefs) db.localTimeEntries,
                 if (paymentsRefs) db.payments
               ],
               addJoins: null,
@@ -5170,6 +6321,18 @@ class $$KimaiProjectsTableTableManager extends RootTableManager<
                         managerFromTypedResult: (p0) =>
                             $$KimaiProjectsTableReferences(db, table, p0)
                                 .timesheetsRefs,
+                        referencedItemsForCurrentItem:
+                            (item, referencedItems) => referencedItems
+                                .where((e) => e.kimaiProjectId == item.id),
+                        typedResults: items),
+                  if (localTimeEntriesRefs)
+                    await $_getPrefetchedData<KimaiProject, $KimaiProjectsTable, LocalTimeEntry>(
+                        currentTable: table,
+                        referencedTable: $$KimaiProjectsTableReferences
+                            ._localTimeEntriesRefsTable(db),
+                        managerFromTypedResult: (p0) =>
+                            $$KimaiProjectsTableReferences(db, table, p0)
+                                .localTimeEntriesRefs,
                         referencedItemsForCurrentItem:
                             (item, referencedItems) => referencedItems
                                 .where((e) => e.kimaiProjectId == item.id),
@@ -5206,7 +6369,178 @@ typedef $$KimaiProjectsTableProcessedTableManager = ProcessedTableManager<
     (KimaiProject, $$KimaiProjectsTableReferences),
     KimaiProject,
     PrefetchHooks Function(
-        {bool appProjectsRefs, bool timesheetsRefs, bool paymentsRefs})>;
+        {bool appProjectsRefs,
+        bool timesheetsRefs,
+        bool localTimeEntriesRefs,
+        bool paymentsRefs})>;
+typedef $$KimaiActivitiesTableCreateCompanionBuilder = KimaiActivitiesCompanion
+    Function({
+  Value<int> id,
+  Value<int?> projectId,
+  required String name,
+  Value<bool> visible,
+  required DateTime syncedAt,
+});
+typedef $$KimaiActivitiesTableUpdateCompanionBuilder = KimaiActivitiesCompanion
+    Function({
+  Value<int> id,
+  Value<int?> projectId,
+  Value<String> name,
+  Value<bool> visible,
+  Value<DateTime> syncedAt,
+});
+
+class $$KimaiActivitiesTableFilterComposer
+    extends Composer<_$AppDatabase, $KimaiActivitiesTable> {
+  $$KimaiActivitiesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get projectId => $composableBuilder(
+      column: $table.projectId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get name => $composableBuilder(
+      column: $table.name, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get visible => $composableBuilder(
+      column: $table.visible, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get syncedAt => $composableBuilder(
+      column: $table.syncedAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$KimaiActivitiesTableOrderingComposer
+    extends Composer<_$AppDatabase, $KimaiActivitiesTable> {
+  $$KimaiActivitiesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get projectId => $composableBuilder(
+      column: $table.projectId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get name => $composableBuilder(
+      column: $table.name, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get visible => $composableBuilder(
+      column: $table.visible, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get syncedAt => $composableBuilder(
+      column: $table.syncedAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$KimaiActivitiesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $KimaiActivitiesTable> {
+  $$KimaiActivitiesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get projectId =>
+      $composableBuilder(column: $table.projectId, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<bool> get visible =>
+      $composableBuilder(column: $table.visible, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get syncedAt =>
+      $composableBuilder(column: $table.syncedAt, builder: (column) => column);
+}
+
+class $$KimaiActivitiesTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $KimaiActivitiesTable,
+    KimaiActivity,
+    $$KimaiActivitiesTableFilterComposer,
+    $$KimaiActivitiesTableOrderingComposer,
+    $$KimaiActivitiesTableAnnotationComposer,
+    $$KimaiActivitiesTableCreateCompanionBuilder,
+    $$KimaiActivitiesTableUpdateCompanionBuilder,
+    (
+      KimaiActivity,
+      BaseReferences<_$AppDatabase, $KimaiActivitiesTable, KimaiActivity>
+    ),
+    KimaiActivity,
+    PrefetchHooks Function()> {
+  $$KimaiActivitiesTableTableManager(
+      _$AppDatabase db, $KimaiActivitiesTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$KimaiActivitiesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$KimaiActivitiesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$KimaiActivitiesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<int?> projectId = const Value.absent(),
+            Value<String> name = const Value.absent(),
+            Value<bool> visible = const Value.absent(),
+            Value<DateTime> syncedAt = const Value.absent(),
+          }) =>
+              KimaiActivitiesCompanion(
+            id: id,
+            projectId: projectId,
+            name: name,
+            visible: visible,
+            syncedAt: syncedAt,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<int?> projectId = const Value.absent(),
+            required String name,
+            Value<bool> visible = const Value.absent(),
+            required DateTime syncedAt,
+          }) =>
+              KimaiActivitiesCompanion.insert(
+            id: id,
+            projectId: projectId,
+            name: name,
+            visible: visible,
+            syncedAt: syncedAt,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$KimaiActivitiesTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $KimaiActivitiesTable,
+    KimaiActivity,
+    $$KimaiActivitiesTableFilterComposer,
+    $$KimaiActivitiesTableOrderingComposer,
+    $$KimaiActivitiesTableAnnotationComposer,
+    $$KimaiActivitiesTableCreateCompanionBuilder,
+    $$KimaiActivitiesTableUpdateCompanionBuilder,
+    (
+      KimaiActivity,
+      BaseReferences<_$AppDatabase, $KimaiActivitiesTable, KimaiActivity>
+    ),
+    KimaiActivity,
+    PrefetchHooks Function()>;
 typedef $$AppProjectsTableCreateCompanionBuilder = AppProjectsCompanion
     Function({
   required String id,
@@ -5308,6 +6642,23 @@ final class $$AppProjectsTableReferences
         (f) => f.appProjectId.id.sqlEquals($_itemColumn<String>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_timesheetsRefsTable($_db));
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: cache));
+  }
+
+  static MultiTypedResultKey<$LocalTimeEntriesTable, List<LocalTimeEntry>>
+      _localTimeEntriesRefsTable(_$AppDatabase db) =>
+          MultiTypedResultKey.fromTable(db.localTimeEntries,
+              aliasName: $_aliasNameGenerator(
+                  db.appProjects.id, db.localTimeEntries.projectId));
+
+  $$LocalTimeEntriesTableProcessedTableManager get localTimeEntriesRefs {
+    final manager = $$LocalTimeEntriesTableTableManager(
+            $_db, $_db.localTimeEntries)
+        .filter((f) => f.projectId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache =
+        $_typedResult.readTableOrNull(_localTimeEntriesRefsTable($_db));
     return ProcessedTableManager(
         manager.$state.copyWith(prefetchedData: cache));
   }
@@ -5439,6 +6790,27 @@ class $$AppProjectsTableFilterComposer
             $$TimesheetsTableFilterComposer(
               $db: $db,
               $table: $db.timesheets,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
+
+  Expression<bool> localTimeEntriesRefs(
+      Expression<bool> Function($$LocalTimeEntriesTableFilterComposer f) f) {
+    final $$LocalTimeEntriesTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.localTimeEntries,
+        getReferencedColumn: (t) => t.projectId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$LocalTimeEntriesTableFilterComposer(
+              $db: $db,
+              $table: $db.localTimeEntries,
               $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
               joinBuilder: joinBuilder,
               $removeJoinBuilderFromRootComposer:
@@ -5651,6 +7023,27 @@ class $$AppProjectsTableAnnotationComposer
             ));
     return f(composer);
   }
+
+  Expression<T> localTimeEntriesRefs<T extends Object>(
+      Expression<T> Function($$LocalTimeEntriesTableAnnotationComposer a) f) {
+    final $$LocalTimeEntriesTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.localTimeEntries,
+        getReferencedColumn: (t) => t.projectId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$LocalTimeEntriesTableAnnotationComposer(
+              $db: $db,
+              $table: $db.localTimeEntries,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
 }
 
 class $$AppProjectsTableTableManager extends RootTableManager<
@@ -5668,7 +7061,8 @@ class $$AppProjectsTableTableManager extends RootTableManager<
         {bool kimaiProjectId,
         bool payoutDatesRefs,
         bool projectRateHistoryRefs,
-        bool timesheetsRefs})> {
+        bool timesheetsRefs,
+        bool localTimeEntriesRefs})> {
   $$AppProjectsTableTableManager(_$AppDatabase db, $AppProjectsTable table)
       : super(TableManagerState(
           db: db,
@@ -5757,13 +7151,15 @@ class $$AppProjectsTableTableManager extends RootTableManager<
               {kimaiProjectId = false,
               payoutDatesRefs = false,
               projectRateHistoryRefs = false,
-              timesheetsRefs = false}) {
+              timesheetsRefs = false,
+              localTimeEntriesRefs = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [
                 if (payoutDatesRefs) db.payoutDates,
                 if (projectRateHistoryRefs) db.projectRateHistory,
-                if (timesheetsRefs) db.timesheets
+                if (timesheetsRefs) db.timesheets,
+                if (localTimeEntriesRefs) db.localTimeEntries
               ],
               addJoins: <
                   T extends TableManagerState<
@@ -5832,6 +7228,19 @@ class $$AppProjectsTableTableManager extends RootTableManager<
                         referencedItemsForCurrentItem:
                             (item, referencedItems) => referencedItems
                                 .where((e) => e.appProjectId == item.id),
+                        typedResults: items),
+                  if (localTimeEntriesRefs)
+                    await $_getPrefetchedData<AppProject, $AppProjectsTable,
+                            LocalTimeEntry>(
+                        currentTable: table,
+                        referencedTable: $$AppProjectsTableReferences
+                            ._localTimeEntriesRefsTable(db),
+                        managerFromTypedResult: (p0) =>
+                            $$AppProjectsTableReferences(db, table, p0)
+                                .localTimeEntriesRefs,
+                        referencedItemsForCurrentItem:
+                            (item, referencedItems) => referencedItems
+                                .where((e) => e.projectId == item.id),
                         typedResults: items)
                 ];
               },
@@ -5855,7 +7264,8 @@ typedef $$AppProjectsTableProcessedTableManager = ProcessedTableManager<
         {bool kimaiProjectId,
         bool payoutDatesRefs,
         bool projectRateHistoryRefs,
-        bool timesheetsRefs})>;
+        bool timesheetsRefs,
+        bool localTimeEntriesRefs})>;
 typedef $$PayoutDatesTableCreateCompanionBuilder = PayoutDatesCompanion
     Function({
   required String id,
@@ -6974,6 +8384,533 @@ typedef $$TimesheetsTableProcessedTableManager = ProcessedTableManager<
     (Timesheet, $$TimesheetsTableReferences),
     Timesheet,
     PrefetchHooks Function({bool kimaiProjectId, bool appProjectId})>;
+typedef $$LocalTimeEntriesTableCreateCompanionBuilder
+    = LocalTimeEntriesCompanion Function({
+  required String id,
+  Value<int?> kimaiTimesheetId,
+  required String projectId,
+  required int kimaiProjectId,
+  Value<int?> activityId,
+  Value<String?> activityName,
+  Value<String?> description,
+  Value<String?> tags,
+  required DateTime beginAt,
+  Value<DateTime?> endAt,
+  Value<int> durationSeconds,
+  required String status,
+  Value<int> syncAttempts,
+  Value<String?> lastSyncError,
+  required DateTime createdAt,
+  required DateTime updatedAt,
+  Value<int> rowid,
+});
+typedef $$LocalTimeEntriesTableUpdateCompanionBuilder
+    = LocalTimeEntriesCompanion Function({
+  Value<String> id,
+  Value<int?> kimaiTimesheetId,
+  Value<String> projectId,
+  Value<int> kimaiProjectId,
+  Value<int?> activityId,
+  Value<String?> activityName,
+  Value<String?> description,
+  Value<String?> tags,
+  Value<DateTime> beginAt,
+  Value<DateTime?> endAt,
+  Value<int> durationSeconds,
+  Value<String> status,
+  Value<int> syncAttempts,
+  Value<String?> lastSyncError,
+  Value<DateTime> createdAt,
+  Value<DateTime> updatedAt,
+  Value<int> rowid,
+});
+
+final class $$LocalTimeEntriesTableReferences extends BaseReferences<
+    _$AppDatabase, $LocalTimeEntriesTable, LocalTimeEntry> {
+  $$LocalTimeEntriesTableReferences(
+      super.$_db, super.$_table, super.$_typedResult);
+
+  static $AppProjectsTable _projectIdTable(_$AppDatabase db) =>
+      db.appProjects.createAlias($_aliasNameGenerator(
+          db.localTimeEntries.projectId, db.appProjects.id));
+
+  $$AppProjectsTableProcessedTableManager get projectId {
+    final $_column = $_itemColumn<String>('project_id')!;
+
+    final manager = $$AppProjectsTableTableManager($_db, $_db.appProjects)
+        .filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_projectIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: [item]));
+  }
+
+  static $KimaiProjectsTable _kimaiProjectIdTable(_$AppDatabase db) =>
+      db.kimaiProjects.createAlias($_aliasNameGenerator(
+          db.localTimeEntries.kimaiProjectId, db.kimaiProjects.id));
+
+  $$KimaiProjectsTableProcessedTableManager get kimaiProjectId {
+    final $_column = $_itemColumn<int>('kimai_project_id')!;
+
+    final manager = $$KimaiProjectsTableTableManager($_db, $_db.kimaiProjects)
+        .filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_kimaiProjectIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: [item]));
+  }
+}
+
+class $$LocalTimeEntriesTableFilterComposer
+    extends Composer<_$AppDatabase, $LocalTimeEntriesTable> {
+  $$LocalTimeEntriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get kimaiTimesheetId => $composableBuilder(
+      column: $table.kimaiTimesheetId,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get activityId => $composableBuilder(
+      column: $table.activityId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get activityName => $composableBuilder(
+      column: $table.activityName, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get description => $composableBuilder(
+      column: $table.description, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get tags => $composableBuilder(
+      column: $table.tags, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get beginAt => $composableBuilder(
+      column: $table.beginAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get endAt => $composableBuilder(
+      column: $table.endAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get durationSeconds => $composableBuilder(
+      column: $table.durationSeconds,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get status => $composableBuilder(
+      column: $table.status, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get syncAttempts => $composableBuilder(
+      column: $table.syncAttempts, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get lastSyncError => $composableBuilder(
+      column: $table.lastSyncError, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnFilters(column));
+
+  $$AppProjectsTableFilterComposer get projectId {
+    final $$AppProjectsTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.projectId,
+        referencedTable: $db.appProjects,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$AppProjectsTableFilterComposer(
+              $db: $db,
+              $table: $db.appProjects,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+
+  $$KimaiProjectsTableFilterComposer get kimaiProjectId {
+    final $$KimaiProjectsTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.kimaiProjectId,
+        referencedTable: $db.kimaiProjects,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$KimaiProjectsTableFilterComposer(
+              $db: $db,
+              $table: $db.kimaiProjects,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+}
+
+class $$LocalTimeEntriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $LocalTimeEntriesTable> {
+  $$LocalTimeEntriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get kimaiTimesheetId => $composableBuilder(
+      column: $table.kimaiTimesheetId,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get activityId => $composableBuilder(
+      column: $table.activityId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get activityName => $composableBuilder(
+      column: $table.activityName,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get description => $composableBuilder(
+      column: $table.description, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get tags => $composableBuilder(
+      column: $table.tags, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get beginAt => $composableBuilder(
+      column: $table.beginAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get endAt => $composableBuilder(
+      column: $table.endAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get durationSeconds => $composableBuilder(
+      column: $table.durationSeconds,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get status => $composableBuilder(
+      column: $table.status, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get syncAttempts => $composableBuilder(
+      column: $table.syncAttempts,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get lastSyncError => $composableBuilder(
+      column: $table.lastSyncError,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnOrderings(column));
+
+  $$AppProjectsTableOrderingComposer get projectId {
+    final $$AppProjectsTableOrderingComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.projectId,
+        referencedTable: $db.appProjects,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$AppProjectsTableOrderingComposer(
+              $db: $db,
+              $table: $db.appProjects,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+
+  $$KimaiProjectsTableOrderingComposer get kimaiProjectId {
+    final $$KimaiProjectsTableOrderingComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.kimaiProjectId,
+        referencedTable: $db.kimaiProjects,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$KimaiProjectsTableOrderingComposer(
+              $db: $db,
+              $table: $db.kimaiProjects,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+}
+
+class $$LocalTimeEntriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LocalTimeEntriesTable> {
+  $$LocalTimeEntriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get kimaiTimesheetId => $composableBuilder(
+      column: $table.kimaiTimesheetId, builder: (column) => column);
+
+  GeneratedColumn<int> get activityId => $composableBuilder(
+      column: $table.activityId, builder: (column) => column);
+
+  GeneratedColumn<String> get activityName => $composableBuilder(
+      column: $table.activityName, builder: (column) => column);
+
+  GeneratedColumn<String> get description => $composableBuilder(
+      column: $table.description, builder: (column) => column);
+
+  GeneratedColumn<String> get tags =>
+      $composableBuilder(column: $table.tags, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get beginAt =>
+      $composableBuilder(column: $table.beginAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get endAt =>
+      $composableBuilder(column: $table.endAt, builder: (column) => column);
+
+  GeneratedColumn<int> get durationSeconds => $composableBuilder(
+      column: $table.durationSeconds, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<int> get syncAttempts => $composableBuilder(
+      column: $table.syncAttempts, builder: (column) => column);
+
+  GeneratedColumn<String> get lastSyncError => $composableBuilder(
+      column: $table.lastSyncError, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$AppProjectsTableAnnotationComposer get projectId {
+    final $$AppProjectsTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.projectId,
+        referencedTable: $db.appProjects,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$AppProjectsTableAnnotationComposer(
+              $db: $db,
+              $table: $db.appProjects,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+
+  $$KimaiProjectsTableAnnotationComposer get kimaiProjectId {
+    final $$KimaiProjectsTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.kimaiProjectId,
+        referencedTable: $db.kimaiProjects,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$KimaiProjectsTableAnnotationComposer(
+              $db: $db,
+              $table: $db.kimaiProjects,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+}
+
+class $$LocalTimeEntriesTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $LocalTimeEntriesTable,
+    LocalTimeEntry,
+    $$LocalTimeEntriesTableFilterComposer,
+    $$LocalTimeEntriesTableOrderingComposer,
+    $$LocalTimeEntriesTableAnnotationComposer,
+    $$LocalTimeEntriesTableCreateCompanionBuilder,
+    $$LocalTimeEntriesTableUpdateCompanionBuilder,
+    (LocalTimeEntry, $$LocalTimeEntriesTableReferences),
+    LocalTimeEntry,
+    PrefetchHooks Function({bool projectId, bool kimaiProjectId})> {
+  $$LocalTimeEntriesTableTableManager(
+      _$AppDatabase db, $LocalTimeEntriesTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LocalTimeEntriesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LocalTimeEntriesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LocalTimeEntriesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> id = const Value.absent(),
+            Value<int?> kimaiTimesheetId = const Value.absent(),
+            Value<String> projectId = const Value.absent(),
+            Value<int> kimaiProjectId = const Value.absent(),
+            Value<int?> activityId = const Value.absent(),
+            Value<String?> activityName = const Value.absent(),
+            Value<String?> description = const Value.absent(),
+            Value<String?> tags = const Value.absent(),
+            Value<DateTime> beginAt = const Value.absent(),
+            Value<DateTime?> endAt = const Value.absent(),
+            Value<int> durationSeconds = const Value.absent(),
+            Value<String> status = const Value.absent(),
+            Value<int> syncAttempts = const Value.absent(),
+            Value<String?> lastSyncError = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<DateTime> updatedAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              LocalTimeEntriesCompanion(
+            id: id,
+            kimaiTimesheetId: kimaiTimesheetId,
+            projectId: projectId,
+            kimaiProjectId: kimaiProjectId,
+            activityId: activityId,
+            activityName: activityName,
+            description: description,
+            tags: tags,
+            beginAt: beginAt,
+            endAt: endAt,
+            durationSeconds: durationSeconds,
+            status: status,
+            syncAttempts: syncAttempts,
+            lastSyncError: lastSyncError,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String id,
+            Value<int?> kimaiTimesheetId = const Value.absent(),
+            required String projectId,
+            required int kimaiProjectId,
+            Value<int?> activityId = const Value.absent(),
+            Value<String?> activityName = const Value.absent(),
+            Value<String?> description = const Value.absent(),
+            Value<String?> tags = const Value.absent(),
+            required DateTime beginAt,
+            Value<DateTime?> endAt = const Value.absent(),
+            Value<int> durationSeconds = const Value.absent(),
+            required String status,
+            Value<int> syncAttempts = const Value.absent(),
+            Value<String?> lastSyncError = const Value.absent(),
+            required DateTime createdAt,
+            required DateTime updatedAt,
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              LocalTimeEntriesCompanion.insert(
+            id: id,
+            kimaiTimesheetId: kimaiTimesheetId,
+            projectId: projectId,
+            kimaiProjectId: kimaiProjectId,
+            activityId: activityId,
+            activityName: activityName,
+            description: description,
+            tags: tags,
+            beginAt: beginAt,
+            endAt: endAt,
+            durationSeconds: durationSeconds,
+            status: status,
+            syncAttempts: syncAttempts,
+            lastSyncError: lastSyncError,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (
+                    e.readTable(table),
+                    $$LocalTimeEntriesTableReferences(db, table, e)
+                  ))
+              .toList(),
+          prefetchHooksCallback: ({projectId = false, kimaiProjectId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins: <
+                  T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic>>(state) {
+                if (projectId) {
+                  state = state.withJoin(
+                    currentTable: table,
+                    currentColumn: table.projectId,
+                    referencedTable:
+                        $$LocalTimeEntriesTableReferences._projectIdTable(db),
+                    referencedColumn: $$LocalTimeEntriesTableReferences
+                        ._projectIdTable(db)
+                        .id,
+                  ) as T;
+                }
+                if (kimaiProjectId) {
+                  state = state.withJoin(
+                    currentTable: table,
+                    currentColumn: table.kimaiProjectId,
+                    referencedTable: $$LocalTimeEntriesTableReferences
+                        ._kimaiProjectIdTable(db),
+                    referencedColumn: $$LocalTimeEntriesTableReferences
+                        ._kimaiProjectIdTable(db)
+                        .id,
+                  ) as T;
+                }
+
+                return state;
+              },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ));
+}
+
+typedef $$LocalTimeEntriesTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $LocalTimeEntriesTable,
+    LocalTimeEntry,
+    $$LocalTimeEntriesTableFilterComposer,
+    $$LocalTimeEntriesTableOrderingComposer,
+    $$LocalTimeEntriesTableAnnotationComposer,
+    $$LocalTimeEntriesTableCreateCompanionBuilder,
+    $$LocalTimeEntriesTableUpdateCompanionBuilder,
+    (LocalTimeEntry, $$LocalTimeEntriesTableReferences),
+    LocalTimeEntry,
+    PrefetchHooks Function({bool projectId, bool kimaiProjectId})>;
 typedef $$PaymentsTableCreateCompanionBuilder = PaymentsCompanion Function({
   required String id,
   required int kimaiProjectId,
@@ -7574,6 +9511,8 @@ class $AppDatabaseManager {
       $$SyncStateTableTableManager(_db, _db.syncState);
   $$KimaiProjectsTableTableManager get kimaiProjects =>
       $$KimaiProjectsTableTableManager(_db, _db.kimaiProjects);
+  $$KimaiActivitiesTableTableManager get kimaiActivities =>
+      $$KimaiActivitiesTableTableManager(_db, _db.kimaiActivities);
   $$AppProjectsTableTableManager get appProjects =>
       $$AppProjectsTableTableManager(_db, _db.appProjects);
   $$PayoutDatesTableTableManager get payoutDates =>
@@ -7582,6 +9521,8 @@ class $AppDatabaseManager {
       $$ProjectRateHistoryTableTableManager(_db, _db.projectRateHistory);
   $$TimesheetsTableTableManager get timesheets =>
       $$TimesheetsTableTableManager(_db, _db.timesheets);
+  $$LocalTimeEntriesTableTableManager get localTimeEntries =>
+      $$LocalTimeEntriesTableTableManager(_db, _db.localTimeEntries);
   $$PaymentsTableTableManager get payments =>
       $$PaymentsTableTableManager(_db, _db.payments);
   $$SyncLogsTableTableManager get syncLogs =>

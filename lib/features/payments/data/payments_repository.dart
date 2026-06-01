@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/app_database.dart';
+import '../../local_tracking/data/local_tracking_repository.dart';
 import '../../projects/data/projects_repository.dart';
 import '../../settings/data/settings_repository.dart';
 
@@ -168,12 +169,14 @@ class PaymentsRepository {
           'SELECT COUNT(*) AS c FROM app_projects '
           'UNION ALL SELECT COUNT(*) FROM payout_dates '
           'UNION ALL SELECT COUNT(*) FROM timesheets '
+          'UNION ALL SELECT COUNT(*) FROM local_time_entries '
           'UNION ALL SELECT COUNT(*) FROM payments '
           'UNION ALL SELECT COUNT(*) FROM sync_state',
           readsFrom: {
             _database.appProjects,
             _database.payoutDates,
             _database.timesheets,
+            _database.localTimeEntries,
             _database.payments,
             _database.syncState,
           },
@@ -504,11 +507,56 @@ class PaymentsRepository {
           ..where((table) => table.beginAt.isBiggerOrEqualValue(begin))
           ..where((table) => table.beginAt.isSmallerThanValue(end)))
         .get();
+    final localRows = await (_database.select(_database.localTimeEntries)
+          ..where((table) => table.projectId.equals(appProjectId))
+          ..where((table) => table.beginAt.isBiggerOrEqualValue(begin))
+          ..where((table) => table.beginAt.isSmallerThanValue(end))
+          ..where(
+            (table) =>
+                table.status.equals(LocalTimeEntryStatus.running.storageValue) |
+                table.status.equals(
+                  LocalTimeEntryStatus.syncPending.storageValue,
+                ) |
+                table.status.equals(
+                  LocalTimeEntryStatus.syncFailed.storageValue,
+                ) |
+                table.status.equals(LocalTimeEntryStatus.conflict.storageValue),
+          ))
+        .get();
+    final project = await (_database.select(_database.appProjects)
+          ..where((table) => table.id.equals(appProjectId)))
+        .getSingleOrNull();
+    final localSeconds = localRows.fold<int>(
+      0,
+      (sum, row) => sum + _localDisplayDuration(row),
+    );
+    final localAmount = localRows.fold<int>(
+      0,
+      (sum, row) =>
+          sum +
+          (project?.hourlyRateMinor == null
+              ? 0
+              : (_localDisplayDuration(row) * project!.hourlyRateMinor! / 3600)
+                  .round()),
+    );
+
+    final remoteSeconds = rows.fold<int>(
+      0,
+      (sum, row) => sum + _remoteDisplayDuration(row),
+    );
+    final remoteAmount = rows.fold<int>(
+      0,
+      (sum, row) =>
+          sum +
+          (row.endAt == null && project?.hourlyRateMinor != null
+              ? (_remoteDisplayDuration(row) * project!.hourlyRateMinor! / 3600)
+                  .round()
+              : (row.amountMinor ?? 0)),
+    );
 
     return (
-      amountMinor:
-          rows.fold<int>(0, (sum, row) => sum + (row.amountMinor ?? 0)),
-      seconds: rows.fold<int>(0, (sum, row) => sum + row.durationSeconds),
+      amountMinor: remoteAmount + localAmount,
+      seconds: remoteSeconds + localSeconds,
     );
   }
 
@@ -642,6 +690,24 @@ DateTime _today() {
 
 DateTime _dateOnly(DateTime value) {
   return DateTime(value.year, value.month, value.day);
+}
+
+int _remoteDisplayDuration(Timesheet entry) {
+  if (entry.endAt == null) {
+    final seconds = DateTime.now().toUtc().difference(entry.beginAt).inSeconds;
+    return seconds < 60 ? 60 : seconds;
+  }
+
+  return entry.durationSeconds < 60 ? 60 : entry.durationSeconds;
+}
+
+int _localDisplayDuration(LocalTimeEntry entry) {
+  if (entry.status == LocalTimeEntryStatus.running.storageValue) {
+    final seconds = DateTime.now().toUtc().difference(entry.beginAt).inSeconds;
+    return seconds < 60 ? 60 : seconds;
+  }
+
+  return entry.durationSeconds < 60 ? 60 : entry.durationSeconds;
 }
 
 String _paymentId(int kimaiProjectId, DateTime payoutDate) {

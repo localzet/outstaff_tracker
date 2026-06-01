@@ -41,6 +41,17 @@ class KimaiProjects extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
+class KimaiActivities extends Table {
+  IntColumn get id => integer()();
+  IntColumn get projectId => integer().nullable()();
+  TextColumn get name => text()();
+  BoolColumn get visible => boolean().withDefault(const Constant(true))();
+  DateTimeColumn get syncedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
 class AppProjects extends Table {
   TextColumn get id => text()();
   IntColumn get kimaiProjectId => integer()
@@ -115,6 +126,30 @@ class Timesheets extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
+class LocalTimeEntries extends Table {
+  TextColumn get id => text()();
+  IntColumn get kimaiTimesheetId => integer().nullable()();
+  TextColumn get projectId =>
+      text().customConstraint('NOT NULL REFERENCES app_projects(id)')();
+  IntColumn get kimaiProjectId =>
+      integer().customConstraint('NOT NULL REFERENCES kimai_projects(id)')();
+  IntColumn get activityId => integer().nullable()();
+  TextColumn get activityName => text().nullable()();
+  TextColumn get description => text().nullable()();
+  TextColumn get tags => text().nullable()();
+  DateTimeColumn get beginAt => dateTime()();
+  DateTimeColumn get endAt => dateTime().nullable()();
+  IntColumn get durationSeconds => integer().withDefault(const Constant(0))();
+  TextColumn get status => text()();
+  IntColumn get syncAttempts => integer().withDefault(const Constant(0))();
+  TextColumn get lastSyncError => text().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
 class Payments extends Table {
   TextColumn get id => text()();
   IntColumn get kimaiProjectId =>
@@ -153,10 +188,12 @@ class SyncLogs extends Table {
     UsersLocal,
     SyncState,
     KimaiProjects,
+    KimaiActivities,
     AppProjects,
     PayoutDates,
     ProjectRateHistory,
     Timesheets,
+    LocalTimeEntries,
     Payments,
     SyncLogs,
   ],
@@ -176,7 +213,7 @@ class AppDatabase extends _$AppDatabase {
         );
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -205,6 +242,13 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 8) {
             await m.createTable(projectRateHistory);
+          }
+          if (from < 9) {
+            await m.createTable(kimaiActivities);
+            await m.createTable(localTimeEntries);
+          }
+          if (from < 10) {
+            await m.addColumn(localTimeEntries, localTimeEntries.tags);
           }
         },
       );

@@ -3,6 +3,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:outstaff_tracker/core/db/app_database.dart';
 import 'package:outstaff_tracker/core/network/kimai_api_client.dart';
+import 'package:outstaff_tracker/features/local_tracking/data/local_tracking_repository.dart';
 import 'package:outstaff_tracker/features/projects/data/projects_repository.dart';
 import 'package:outstaff_tracker/features/timesheets/data/timesheets_repository.dart';
 
@@ -39,6 +40,7 @@ void main() {
             activityName: const Value('Development'),
             description: const Value('Feature work'),
             beginAt: DateTime.utc(2026, 5, 1, 9),
+            endAt: Value(DateTime.utc(2026, 5, 1, 10)),
             durationSeconds: const Value(3600),
             amountMinor: const Value(10000),
             syncedAt: DateTime.utc(2026),
@@ -66,6 +68,46 @@ void main() {
     expect(totals.entryCount, 1);
   });
 
+  test('running local entry is included in current week summary', () async {
+    final begin = DateTime.now().toUtc().subtract(const Duration(minutes: 10));
+    await LocalTrackingRepository(database).startTimer(
+      appProjectId: 'kimai_1',
+      kimaiProjectId: 1,
+      beginAt: begin,
+      now: begin,
+    );
+
+    final summary = await repository.getCurrentWeekSummary();
+
+    expect(summary.totalSeconds, greaterThanOrEqualTo(600));
+    expect(summary.entryCount, greaterThanOrEqualTo(1));
+  });
+
+  test('running remote entry uses dynamic duration in filtered list', () async {
+    final begin = DateTime.now().toUtc().subtract(const Duration(minutes: 5));
+    await database.into(database.timesheets).insert(
+          TimesheetsCompanion.insert(
+            id: const Value(401),
+            kimaiProjectId: const Value(1),
+            appProjectId: const Value('kimai_1'),
+            beginAt: begin,
+            durationSeconds: const Value(0),
+            syncedAt: begin,
+          ),
+        );
+
+    final entries = await repository.getTimesheetsFiltered(
+      TimesheetFilters(
+        begin: begin.subtract(const Duration(minutes: 1)),
+        end: DateTime.now().add(const Duration(minutes: 1)),
+      ),
+    );
+    final entry = entries.singleWhere((item) => item.kimaiTimesheetId == 401);
+
+    expect(entry.endAt, null);
+    expect(entry.durationSeconds, greaterThanOrEqualTo(300));
+  });
+
   test('applies rate history only for matching effective period', () async {
     await database.into(database.projectRateHistory).insert(
           ProjectRateHistoryCompanion.insert(
@@ -83,12 +125,14 @@ void main() {
           id: 201,
           projectId: 1,
           beginAt: DateTime.utc(2026, 5, 20, 9),
+          endAt: DateTime.utc(2026, 5, 20, 10),
           durationSeconds: 3600,
         ),
         KimaiTimesheetDto(
           id: 202,
           projectId: 1,
           beginAt: DateTime.utc(2026, 6, 2, 9),
+          endAt: DateTime.utc(2026, 6, 2, 10),
           durationSeconds: 3600,
         ),
       ],
@@ -145,6 +189,7 @@ void main() {
             kimaiProjectId: const Value(2),
             appProjectId: const Value('kimai_2'),
             beginAt: DateTime.utc(2026, 5, 1, 9),
+            endAt: Value(DateTime.utc(2026, 5, 1, 10)),
             durationSeconds: const Value(3600),
             amountMinor: const Value(0),
             syncedAt: DateTime.utc(2026),
@@ -172,6 +217,7 @@ void main() {
             kimaiProjectId: const Value(1),
             appProjectId: const Value('kimai_1'),
             beginAt: DateTime.utc(2026, 5, 2, 9),
+            endAt: Value(DateTime.utc(2026, 5, 2, 10, 30)),
             durationSeconds: const Value(5400),
             amountMinor: const Value(0),
             syncedAt: DateTime.utc(2026),
@@ -211,6 +257,7 @@ void main() {
             kimaiProjectId: const Value(3),
             appProjectId: const Value('kimai_3'),
             beginAt: DateTime.utc(2026, 4, 1, 9),
+            endAt: Value(DateTime.utc(2026, 4, 1, 10)),
             durationSeconds: const Value(3600),
             amountMinor: const Value(0),
             syncedAt: DateTime.utc(2026),
@@ -229,6 +276,7 @@ void main() {
           id: 304,
           projectId: 3,
           beginAt: DateTime.utc(2026, 4, 2, 9),
+          endAt: DateTime.utc(2026, 4, 2, 10),
           durationSeconds: 3600,
         ),
       ],

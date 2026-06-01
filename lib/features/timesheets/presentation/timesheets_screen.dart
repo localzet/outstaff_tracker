@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/export/export_file_saver.dart';
+import '../../../core/export/report_file_exporter.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_time_formats.dart';
+import '../../../core/utils/tags.dart';
 import '../../../core/widgets/app_screen.dart';
 import '../../../core/widgets/responsive_data_table.dart';
+import '../../local_tracking/data/local_tracking_repository.dart';
 import '../data/timesheets_repository.dart';
 
 class TimesheetsScreen extends ConsumerStatefulWidget {
@@ -21,6 +25,7 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
   late DateTime _begin;
   late DateTime _end;
   String? _projectId;
+  String? _tag;
   String _searchText = '';
   TimesheetSortField _sortField = TimesheetSortField.date;
   bool _sortAscending = false;
@@ -39,6 +44,7 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
       begin: _begin,
       end: _end,
       appProjectId: _projectId,
+      tag: _tag,
       searchText: _searchText,
       sortField: _sortField,
       sortAscending: _sortAscending,
@@ -46,6 +52,7 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
     final entries = ref.watch(_filteredTimesheetsProvider(filters));
     final totals = ref.watch(_timesheetTotalsProvider(filters));
     final projects = ref.watch(_availableProjectsProvider);
+    final tags = ref.watch(_availableTagsProvider);
 
     return AppScreen(
       title: 'Учёт времени',
@@ -69,15 +76,13 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
                   isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Проект'),
                   items: [
-                    const DropdownMenuItem(
+                    const DropdownMenuItem<String?>(
                       value: null,
-                      child: Text(
-                        'Все проекты',
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      child:
+                          Text('Все проекты', overflow: TextOverflow.ellipsis),
                     ),
                     for (final project in items)
-                      DropdownMenuItem(
+                      DropdownMenuItem<String?>(
                         value: project.appProjectId,
                         child: Text(
                           project.name,
@@ -92,10 +97,34 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
               ),
             ),
             SizedBox(
+              width: 180,
+              child: tags.when(
+                data: (items) => DropdownButtonFormField<String?>(
+                  initialValue: _tag,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Метки'),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('Все метки', overflow: TextOverflow.ellipsis),
+                    ),
+                    for (final tag in items)
+                      DropdownMenuItem<String?>(
+                        value: tag,
+                        child: Text(tag, overflow: TextOverflow.ellipsis),
+                      ),
+                  ],
+                  onChanged: (value) => setState(() => _tag = value),
+                ),
+                loading: () => const LinearProgressIndicator(),
+                error: (error, stackTrace) => Text(error.toString()),
+              ),
+            ),
+            SizedBox(
               width: 260,
               child: TextField(
                 decoration: const InputDecoration(
-                  labelText: 'Активность или описание',
+                  labelText: 'Активность, описание, проект или метка',
                   prefixIcon: Icon(Icons.search_rounded, size: 18),
                 ),
                 onChanged: (value) => setState(() => _searchText = value),
@@ -113,15 +142,25 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
                     child: Text('Дата', overflow: TextOverflow.ellipsis),
                   ),
                   DropdownMenuItem(
+                    value: TimesheetSortField.project,
+                    child: Text('Проект', overflow: TextOverflow.ellipsis),
+                  ),
+                  DropdownMenuItem(
+                    value: TimesheetSortField.activity,
+                    child: Text('Активность', overflow: TextOverflow.ellipsis),
+                  ),
+                  DropdownMenuItem(
                     value: TimesheetSortField.duration,
-                    child: Text(
-                      'Длительность',
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    child:
+                        Text('Длительность', overflow: TextOverflow.ellipsis),
                   ),
                   DropdownMenuItem(
                     value: TimesheetSortField.amount,
                     child: Text('Сумма', overflow: TextOverflow.ellipsis),
+                  ),
+                  DropdownMenuItem(
+                    value: TimesheetSortField.status,
+                    child: Text('Статус', overflow: TextOverflow.ellipsis),
                   ),
                 ],
                 onChanged: (value) {
@@ -143,7 +182,12 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
             OutlinedButton.icon(
               onPressed: () => _exportCsv(filters),
               icon: const Icon(Icons.download_rounded, size: 18),
-              label: const Text('Экспорт CSV'),
+              label: const Text('CSV'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => _exportXlsx(filters),
+              icon: const Icon(Icons.table_view_rounded, size: 18),
+              label: const Text('XLSX'),
             ),
           ],
         ),
@@ -156,9 +200,12 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
           ),
         ),
         entries.when(
-          data: (items) {
-            return TimesheetsTable(entries: items);
-          },
+          data: (items) => TimesheetsTable(
+            entries: items,
+            sortField: _sortField,
+            sortAscending: _sortAscending,
+            onSort: _onSort,
+          ),
           loading: () => const LinearProgressIndicator(),
           error: (error, stackTrace) => EmptyState(
             title: 'Записи недоступны',
@@ -179,12 +226,7 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
         start: _begin,
         end: _end.subtract(const Duration(days: 1)),
       ),
-      builder: (context, child) => Theme(
-        data: Theme.of(context),
-        child: child ?? const SizedBox.shrink(),
-      ),
     );
-
     if (selected == null) {
       return;
     }
@@ -207,57 +249,112 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
     final entries = await ref
         .read(timesheetsRepositoryProvider)
         .getTimesheetsFiltered(filters);
-    final csv = _buildCsv(entries);
-    await Clipboard.setData(ClipboardData(text: csv));
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('CSV скопирован: ${entries.length} строк')),
-      );
-    }
+    await _saveExport(
+      fileName: _fileName('csv'),
+      bytes: buildCsvBytes(_exportRows(entries)),
+      mimeType: 'text/csv',
+    );
   }
 
-  String _buildCsv(List<TimesheetEntry> entries) {
-    final rows = <List<String>>[
+  Future<void> _exportXlsx(TimesheetFilters filters) async {
+    final entries = await ref
+        .read(timesheetsRepositoryProvider)
+        .getTimesheetsFiltered(filters);
+    await _saveExport(
+      fileName: _fileName('xlsx'),
+      bytes: buildXlsxBytes([
+        ExportSheet(name: 'Timesheets', rows: _exportRows(entries)),
+      ]),
+      mimeType:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+  }
+
+  Future<void> _saveExport({
+    required String fileName,
+    required Uint8List bytes,
+    required String mimeType,
+  }) async {
+    final result = await saveOrShareExportFile(
+      fileName: fileName,
+      bytes: bytes,
+      mimeType: mimeType,
+    );
+    if (!mounted || result == null) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result.shared
+              ? 'Файл отчёта готов к отправке'
+              : 'Файл отчёта сохранён',
+        ),
+      ),
+    );
+  }
+
+  List<List<Object?>> _exportRows(List<TimesheetEntry> entries) {
+    return [
       [
         'Дата',
         'Проект',
         'Активность',
+        'Метки',
         'Описание',
         'Минуты',
         'Длительность',
         'Ставка',
         'Сумма',
+        'Статус',
       ],
       for (final entry in entries)
         [
-          entry.timesheet.beginAt.toLocal().toIso8601String(),
+          entry.beginAt.toLocal().toIso8601String(),
           entry.projectName,
-          entry.timesheet.activityName ?? '',
-          entry.timesheet.description ?? '',
-          (entry.timesheet.durationSeconds ~/ 60).toString(),
-          formatDurationSeconds(entry.timesheet.durationSeconds),
+          entry.activityName ?? '',
+          formatTagsForDisplay(entry.tags),
+          entry.description ?? '',
+          entry.durationSeconds ~/ 60,
+          formatDurationSeconds(entry.durationSeconds),
           entry.hourlyRateMinor == null
-              ? ''
+              ? null
               : (entry.hourlyRateMinor! / 100).toStringAsFixed(2),
-          entry.timesheet.amountMinor == null
-              ? ''
-              : (entry.timesheet.amountMinor! / 100).toStringAsFixed(2),
+          entry.amountMinor == null
+              ? null
+              : (entry.amountMinor! / 100).toStringAsFixed(2),
+          entry.localStatus?.label ?? 'Kimai',
         ],
     ];
-
-    return rows.map((row) => row.map(_escapeCsv).join(',')).join('\n');
   }
 
-  String _escapeCsv(String value) {
-    final escaped = value.replaceAll('"', '""');
-    if (escaped.contains(',') ||
-        escaped.contains('\n') ||
-        escaped.contains('"')) {
-      return '"$escaped"';
-    }
+  String _fileName(String extension) {
+    final project = _projectId ?? 'all';
+    final from = DateTimeFormats.compactDate.format(_begin);
+    final to = DateTimeFormats.compactDate.format(
+      _end.subtract(const Duration(days: 1)),
+    );
 
-    return escaped;
+    return 'outstaff_report_${_safeFilePart(project)}_${_safeFilePart(from)}_${_safeFilePart(to)}.$extension';
+  }
+
+  String _safeFilePart(String value) {
+    return value.replaceAll(RegExp(r'[^A-Za-zА-Яа-я0-9._-]+'), '_');
+  }
+
+  void _onSort(String key, bool ascending) {
+    setState(() {
+      _sortField = switch (key) {
+        'project' => TimesheetSortField.project,
+        'activity' => TimesheetSortField.activity,
+        'duration' => TimesheetSortField.duration,
+        'amount' => TimesheetSortField.amount,
+        'status' => TimesheetSortField.status,
+        _ => TimesheetSortField.date,
+      };
+      _sortAscending = ascending;
+    });
   }
 }
 
@@ -297,31 +394,38 @@ class TimesheetTotalsBar extends StatelessWidget {
 class TimesheetsTable extends StatelessWidget {
   const TimesheetsTable({
     required this.entries,
+    required this.sortField,
+    required this.sortAscending,
+    required this.onSort,
     super.key,
   });
 
   final List<TimesheetEntry> entries;
+  final TimesheetSortField sortField;
+  final bool sortAscending;
+  final void Function(String key, bool ascending) onSort;
 
   @override
   Widget build(BuildContext context) {
     return ResponsiveDataTable<TimesheetEntry>(
       items: entries,
+      sortColumnKey: _sortKey(sortField),
+      sortAscending: sortAscending,
+      onSort: onSort,
       columns: [
         AppTableColumn(
           key: 'date',
           label: 'Дата',
           width: 150,
-          sortable: false,
           cellBuilder: (context, entry) => Text(
-            '${DateTimeFormats.date.format(entry.timesheet.beginAt.toLocal())} '
-            '${DateTimeFormats.time.format(entry.timesheet.beginAt.toLocal())}',
+            '${DateTimeFormats.date.format(entry.beginAt.toLocal())} '
+            '${DateTimeFormats.time.format(entry.beginAt.toLocal())}',
           ),
         ),
         AppTableColumn(
           key: 'project',
           label: 'Проект',
           width: 180,
-          sortable: false,
           cellBuilder: (context, entry) => Row(
             children: [
               _ColorDot(color: entry.projectColor),
@@ -342,11 +446,17 @@ class TimesheetsTable extends StatelessWidget {
           key: 'activity',
           label: 'Активность',
           width: 150,
-          sortable: false,
           cellBuilder: (context, entry) => Text(
-            entry.timesheet.activityName ?? '-',
+            entry.activityName ?? '-',
             overflow: TextOverflow.ellipsis,
           ),
+        ),
+        AppTableColumn(
+          key: 'tags',
+          label: 'Метки',
+          width: 180,
+          sortable: false,
+          cellBuilder: (context, entry) => _TagChips(tags: entry.tags),
         ),
         AppTableColumn(
           key: 'description',
@@ -354,9 +464,9 @@ class TimesheetsTable extends StatelessWidget {
           width: 260,
           sortable: false,
           cellBuilder: (context, entry) => Tooltip(
-            message: entry.timesheet.description ?? '-',
+            message: entry.description ?? '-',
             child: Text(
-              entry.timesheet.description ?? '-',
+              entry.description ?? '-',
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -365,10 +475,15 @@ class TimesheetsTable extends StatelessWidget {
           key: 'duration',
           label: 'Длительность',
           width: 120,
-          sortable: false,
           cellBuilder: (context, entry) => Text(
-            formatDurationSeconds(entry.timesheet.durationSeconds),
+            formatDurationSeconds(entry.durationSeconds),
           ),
+        ),
+        AppTableColumn(
+          key: 'status',
+          label: 'Статус',
+          width: 140,
+          cellBuilder: (context, entry) => _LocalStatusChip(entry: entry),
         ),
         AppTableColumn(
           key: 'rate',
@@ -385,11 +500,10 @@ class TimesheetsTable extends StatelessWidget {
           key: 'amount',
           label: 'Сумма',
           width: 110,
-          sortable: false,
           cellBuilder: (context, entry) => Text(
-            entry.timesheet.amountMinor == null
+            entry.amountMinor == null
                 ? '-'
-                : formatMoneyRub(entry.timesheet.amountMinor!),
+                : formatMoneyRub(entry.amountMinor!),
           ),
         ),
       ],
@@ -409,24 +523,98 @@ class TimesheetsTable extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
-              Text(formatDurationSeconds(entry.timesheet.durationSeconds)),
+              Text(formatDurationSeconds(entry.durationSeconds)),
             ],
           ),
           const SizedBox(height: 6),
           Text(
-            '${DateTimeFormats.date.format(entry.timesheet.beginAt.toLocal())} '
-            '${DateTimeFormats.time.format(entry.timesheet.beginAt.toLocal())}',
+            '${DateTimeFormats.date.format(entry.beginAt.toLocal())} '
+            '${DateTimeFormats.time.format(entry.beginAt.toLocal())}',
           ),
-          Text(entry.timesheet.activityName ?? '-'),
-          if ((entry.timesheet.description ?? '').isNotEmpty)
-            Text(entry.timesheet.description!, overflow: TextOverflow.ellipsis),
+          Text(entry.activityName ?? '-'),
+          _TagChips(tags: entry.tags),
+          if ((entry.description ?? '').isNotEmpty)
+            Text(entry.description!, overflow: TextOverflow.ellipsis),
+          _LocalStatusChip(entry: entry),
           const SizedBox(height: 6),
           Text(
-            entry.timesheet.amountMinor == null
+            entry.amountMinor == null
                 ? '-'
-                : formatMoneyRub(entry.timesheet.amountMinor!),
+                : formatMoneyRub(entry.amountMinor!),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TagChips extends StatelessWidget {
+  const _TagChips({required this.tags});
+
+  final String? tags;
+
+  @override
+  Widget build(BuildContext context) {
+    final values = parseTags(tags);
+    if (values.isEmpty) {
+      return const Text('-');
+    }
+
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: [
+        for (final tag in values.take(3))
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: AppColors.surfaceElevated,
+              border: Border.all(color: AppColors.border),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              child: Text(
+                tag,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _LocalStatusChip extends StatelessWidget {
+  const _LocalStatusChip({required this.entry});
+
+  final TimesheetEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = entry.localStatus;
+    if (status == null) {
+      return const Text('Kimai');
+    }
+
+    final color = switch (status) {
+      LocalTimeEntryStatus.synced => AppColors.accent,
+      LocalTimeEntryStatus.syncFailed => AppColors.danger,
+      LocalTimeEntryStatus.conflict => AppColors.warning,
+      _ => AppColors.warning,
+    };
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(color: color),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          child: Text(status.label, style: TextStyle(color: color)),
+        ),
       ),
     );
   }
@@ -509,6 +697,17 @@ class _CopyErrorButton extends StatelessWidget {
   }
 }
 
+String _sortKey(TimesheetSortField field) {
+  return switch (field) {
+    TimesheetSortField.project => 'project',
+    TimesheetSortField.activity => 'activity',
+    TimesheetSortField.duration => 'duration',
+    TimesheetSortField.amount => 'amount',
+    TimesheetSortField.status => 'status',
+    TimesheetSortField.date => 'date',
+  };
+}
+
 final _filteredTimesheetsProvider = StreamProvider.autoDispose
     .family<List<TimesheetEntry>, TimesheetFilters>((ref, filters) {
   return ref
@@ -526,4 +725,8 @@ final _availableProjectsProvider =
   return ref
       .watch(timesheetsRepositoryProvider)
       .getAvailableTimesheetProjects();
+});
+
+final _availableTagsProvider = FutureProvider.autoDispose<List<String>>((ref) {
+  return ref.watch(timesheetsRepositoryProvider).getAvailableTags();
 });
