@@ -232,25 +232,37 @@ class AppDatabase extends _$AppDatabase {
         onCreate: (m) => m.createAll(),
         onUpgrade: (m, from, to) async {
           if (from < 2) {
-            await m.addColumn(appProjects, appProjects.enabled);
-            await m.addColumn(appProjects, appProjects.weeklyGoalHours);
-            await m.addColumn(appProjects, appProjects.payoutRule);
+            await _addColumnIfMissing(m, appProjects, appProjects.enabled);
+            await _addColumnIfMissing(
+              m,
+              appProjects,
+              appProjects.weeklyGoalHours,
+            );
+            await _addColumnIfMissing(m, appProjects, appProjects.payoutRule);
           }
           if (from < 3) {
-            await m.addColumn(appProjects, appProjects.hourlyRateMinor);
-            await m.addColumn(timesheets, timesheets.amountMinor);
+            await _addColumnIfMissing(
+              m,
+              appProjects,
+              appProjects.hourlyRateMinor,
+            );
+            await _addColumnIfMissing(m, timesheets, timesheets.amountMinor);
           }
           if (from < 4) {
-            await m.addColumn(syncLogs, syncLogs.error);
+            await _addColumnIfMissing(m, syncLogs, syncLogs.error);
           }
           if (from < 5) {
-            await m.addColumn(syncLogs, syncLogs.debug);
+            await _addColumnIfMissing(m, syncLogs, syncLogs.debug);
           }
           if (from < 6) {
             await m.createTable(payments);
           }
           if (from < 7) {
-            await m.addColumn(appProjects, appProjects.payoutAnchorDate);
+            await _addColumnIfMissing(
+              m,
+              appProjects,
+              appProjects.payoutAnchorDate,
+            );
           }
           if (from < 8) {
             await m.createTable(projectRateHistory);
@@ -260,16 +272,34 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(localTimeEntries);
           }
           if (from < 10) {
-            await m.addColumn(localTimeEntries, localTimeEntries.tags);
+            await _addColumnIfMissing(
+              m,
+              localTimeEntries,
+              localTimeEntries.tags,
+            );
           }
           if (from < 11) {
             await m.createTable(kimaiTags);
           }
           if (from < 12) {
-            await m.addColumn(timesheets, timesheets.activityId);
+            await _addColumnIfMissing(m, timesheets, timesheets.activityId);
           }
         },
       );
+
+  Future<void> _addColumnIfMissing(
+    Migrator migrator,
+    TableInfo<Table, Object?> table,
+    GeneratedColumn<Object> column,
+  ) async {
+    final rows = await customSelect(
+      'PRAGMA table_info(${table.actualTableName})',
+    ).get();
+    final columnExists = rows.any((row) => row.data['name'] == column.$name);
+    if (!columnExists) {
+      await migrator.addColumn(table, column);
+    }
+  }
 }
 
 final appDatabaseProvider = Provider<AppDatabase>((ref) {

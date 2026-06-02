@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'core/config/app_branding.dart';
 import 'core/theme/app_theme.dart';
+import 'core/widgets/app_screen.dart';
 import 'features/analytics/presentation/analytics_screen.dart';
 import 'features/calendar/presentation/calendar_screen.dart';
 import 'features/dashboard/presentation/dashboard_screen.dart';
@@ -101,6 +102,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
     ],
+    errorBuilder: (context, state) => RouterErrorScreen(error: state.error),
   );
 });
 
@@ -124,8 +126,39 @@ class OutstaffTrackerApp extends ConsumerWidget {
       ],
       routerConfig: router,
       builder: (context, child) => AutoUpdateHost(
-        child: AutoSyncHost(child: child),
+        child: AutoSyncHost(child: child ?? const AppStartupFallback()),
       ),
+    );
+  }
+}
+
+class AppStartupFallback extends StatelessWidget {
+  const AppStartupFallback({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const ColoredBox(
+      color: AppColors.background,
+      child: Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
+class RouterErrorScreen extends StatelessWidget {
+  const RouterErrorScreen({required this.error, super.key});
+
+  final Exception? error;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppScreen(
+      title: 'Не удалось открыть экран',
+      subtitle: 'Ошибка запуска маршрутизации приложения.',
+      children: [
+        AppPanel(
+          child: SelectableText(error?.toString() ?? 'Неизвестная ошибка.'),
+        ),
+      ],
     );
   }
 }
