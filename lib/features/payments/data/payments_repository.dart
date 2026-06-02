@@ -515,10 +515,19 @@ class PaymentsRepository {
             (table) =>
                 table.status.equals(LocalTimeEntryStatus.running.storageValue) |
                 table.status.equals(
+                  LocalTimeEntryStatus.syncingStart.storageValue,
+                ) |
+                table.status.equals(
+                  LocalTimeEntryStatus.runningLocal.storageValue,
+                ) |
+                table.status.equals(
                   LocalTimeEntryStatus.syncPending.storageValue,
                 ) |
                 table.status.equals(
                   LocalTimeEntryStatus.syncFailed.storageValue,
+                ) |
+                table.status.equals(
+                  LocalTimeEntryStatus.stopFailed.storageValue,
                 ) |
                 table.status.equals(LocalTimeEntryStatus.conflict.storageValue),
           ))
@@ -702,12 +711,23 @@ int _remoteDisplayDuration(Timesheet entry) {
 }
 
 int _localDisplayDuration(LocalTimeEntry entry) {
-  if (entry.status == LocalTimeEntryStatus.running.storageValue) {
+  if (_isOpenLocalEntry(entry)) {
     final seconds = DateTime.now().toUtc().difference(entry.beginAt).inSeconds;
     return seconds < 60 ? 60 : seconds;
   }
 
   return entry.durationSeconds < 60 ? 60 : entry.durationSeconds;
+}
+
+bool _isOpenLocalEntry(LocalTimeEntry entry) {
+  if (entry.endAt != null) {
+    return false;
+  }
+
+  return entry.status == LocalTimeEntryStatus.running.storageValue ||
+      entry.status == LocalTimeEntryStatus.syncingStart.storageValue ||
+      entry.status == LocalTimeEntryStatus.runningLocal.storageValue ||
+      entry.status == LocalTimeEntryStatus.syncFailed.storageValue;
 }
 
 String _paymentId(int kimaiProjectId, DateTime payoutDate) {

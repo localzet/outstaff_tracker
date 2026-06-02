@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -191,6 +192,78 @@ void main() {
     expect(fakeClient.startCalls, 1);
   });
 
+  test('offline timer start keeps local running entry only', () async {
+    final fakeClient = _FakeKimaiClient(
+      createdTimesheet: KimaiTimesheetDto(
+        id: 501,
+        projectId: 1,
+        beginAt: DateTime.utc(2026, 6, 1, 9),
+        durationSeconds: 0,
+      ),
+      startError: DioException(
+        requestOptions: RequestOptions(path: '/api/timesheets'),
+        type: DioExceptionType.connectionError,
+      ),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(database),
+        kimaiApiClientProvider.overrideWith((ref) async => fakeClient),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final entry =
+        await container.read(localTrackingSyncServiceProvider).startTimer(
+              appProjectId: 'kimai_1',
+              kimaiProjectId: 1,
+              beginAt: DateTime.utc(2026, 6, 1, 9),
+            );
+
+    expect(entry.status, LocalTimeEntryStatus.runningLocal.storageValue);
+    expect(entry.kimaiTimesheetId, null);
+    expect(fakeClient.startCalls, 1);
+  });
+
+  test('Kimai start server error keeps timer active as sync failed', () async {
+    final fakeClient = _FakeKimaiClient(
+      createdTimesheet: KimaiTimesheetDto(
+        id: 501,
+        projectId: 1,
+        beginAt: DateTime.utc(2026, 6, 1, 9),
+        durationSeconds: 0,
+      ),
+      startError: DioException(
+        requestOptions: RequestOptions(path: '/api/timesheets'),
+        response: Response<Object?>(
+          requestOptions: RequestOptions(path: '/api/timesheets'),
+          statusCode: 500,
+        ),
+      ),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(database),
+        kimaiApiClientProvider.overrideWith((ref) async => fakeClient),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await expectLater(
+      () => container.read(localTrackingSyncServiceProvider).startTimer(
+            appProjectId: 'kimai_1',
+            kimaiProjectId: 1,
+            beginAt: DateTime.utc(2026, 6, 1, 9),
+          ),
+      throwsA(isA<DioException>()),
+    );
+
+    final running = await repository.getRunningEntry();
+    expect(running == null, false);
+    expect(running!.status, LocalTimeEntryStatus.syncFailed.storageValue);
+    expect(running.endAt, null);
+  });
+
   test('stop synced timer updates Kimai and local status', () async {
     final fakeClient = _FakeKimaiClient(
       createdTimesheet: KimaiTimesheetDto(
@@ -232,6 +305,107 @@ void main() {
     expect(stopped.status, LocalTimeEntryStatus.synced.storageValue);
     expect(stopped.durationSeconds, 3600);
     expect(fakeClient.stopCalls, 1);
+  });
+
+  test('failed synced stop is retried with Kimai stop endpoint', () async {
+    final fakeClient = _FakeKimaiClient(
+      createdTimesheet: KimaiTimesheetDto(
+        id: 501,
+        projectId: 1,
+        beginAt: DateTime.utc(2026, 6, 1, 9),
+        durationSeconds: 0,
+      ),
+      stoppedTimesheet: KimaiTimesheetDto(
+        id: 701,
+        projectId: 1,
+        beginAt: DateTime.utc(2026, 6, 1, 9),
+        endAt: DateTime.utc(2026, 6, 1, 10),
+        durationSeconds: 3600,
+      ),
+      stopErrors: [
+        DioException(
+          requestOptions: RequestOptions(path: '/api/timesheets/701/stop'),
+        ),
+      ],
+    );
+    final container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(database),
+        kimaiApiClientProvider.overrideWith((ref) async => fakeClient),
+      ],
+    );
+    addTearDown(container.dispose);
+    final local = await repository.startTimer(
+      appProjectId: 'kimai_1',
+      kimaiProjectId: 1,
+      beginAt: DateTime.utc(2026, 6, 1, 9),
+      now: DateTime.utc(2026, 6, 1, 9),
+      status: LocalTimeEntryStatus.runningSynced,
+    );
+    await repository.markRunningSynced(id: local.id, kimaiTimesheetId: 701);
+
+    await expectLater(
+      () => container.read(localTrackingSyncServiceProvider).stopTimer(
+            endAt: DateTime.utc(2026, 6, 1, 10),
+          ),
+      throwsA(isA<DioException>()),
+    );
+
+    final failed = await database.select(database.localTimeEntries).getSingle();
+    expect(failed.status, LocalTimeEntryStatus.stopFailed.storageValue);
+    expect(failed.endAt!.toUtc(), DateTime.utc(2026, 6, 1, 10));
+
+    final result = await container
+        .read(localTrackingSyncServiceProvider)
+        .syncPendingEntries();
+    final synced = await database.select(database.localTimeEntries).getSingle();
+
+    expect(result.synced, 1);
+    expect(fakeClient.stopCalls, 2);
+    expect(fakeClient.createCalls, 0);
+    expect(synced.status, LocalTimeEntryStatus.synced.storageValue);
+  });
+
+  test('synced local entry preserves activity id in timesheets', () async {
+    final fakeClient = _FakeKimaiClient(
+      createdTimesheet: KimaiTimesheetDto(
+        id: 504,
+        projectId: 1,
+        activityId: 7,
+        beginAt: DateTime.utc(2026, 6, 1, 9),
+        endAt: DateTime.utc(2026, 6, 1, 10),
+        durationSeconds: 3600,
+      ),
+    );
+    await database.into(database.kimaiActivities).insert(
+          KimaiActivitiesCompanion.insert(
+            id: const Value(7),
+            projectId: const Value(1),
+            name: 'Development',
+            syncedAt: DateTime.utc(2026),
+          ),
+        );
+    await repository.startTimer(
+      appProjectId: 'kimai_1',
+      kimaiProjectId: 1,
+      activityId: 7,
+      activityName: 'Development',
+      now: DateTime.utc(2026, 6, 1, 9),
+    );
+    await repository.stopRunningTimer(now: DateTime.utc(2026, 6, 1, 10));
+    final container = ProviderContainer(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(database),
+        kimaiApiClientProvider.overrideWith((ref) async => fakeClient),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(localTrackingSyncServiceProvider).syncPendingEntries();
+    final timesheet = await database.select(database.timesheets).getSingle();
+
+    expect(timesheet.activityId, 7);
+    expect(timesheet.activityName, 'Development');
   });
 
   test('sync sends description exactly without local metadata', () async {
@@ -378,12 +552,17 @@ class _FakeKimaiClient implements KimaiApiClient {
     required this.createdTimesheet,
     KimaiTimesheetDto? startedTimesheet,
     KimaiTimesheetDto? stoppedTimesheet,
+    this.startError,
+    List<Object>? stopErrors,
   })  : startedTimesheet = startedTimesheet ?? createdTimesheet,
-        stoppedTimesheet = stoppedTimesheet ?? createdTimesheet;
+        stoppedTimesheet = stoppedTimesheet ?? createdTimesheet,
+        stopErrors = stopErrors ?? [];
 
   final KimaiTimesheetDto createdTimesheet;
   final KimaiTimesheetDto startedTimesheet;
   final KimaiTimesheetDto stoppedTimesheet;
+  final Object? startError;
+  final List<Object> stopErrors;
   int createCalls = 0;
   int startCalls = 0;
   int stopCalls = 0;
@@ -416,6 +595,10 @@ class _FakeKimaiClient implements KimaiApiClient {
     startCalls++;
     lastDescription = description;
     lastTags = tags;
+    final error = startError;
+    if (error != null) {
+      throw error;
+    }
     return startedTimesheet;
   }
 
@@ -425,6 +608,9 @@ class _FakeKimaiClient implements KimaiApiClient {
     required DateTime endAt,
   }) async {
     stopCalls++;
+    if (stopErrors.isNotEmpty) {
+      throw stopErrors.removeAt(0);
+    }
     return stoppedTimesheet;
   }
 

@@ -216,11 +216,22 @@ class _AutoUpdateHostState extends ConsumerState<AutoUpdateHost> {
               child: const Text('Позже'),
             ),
             FilledButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.of(context).pop();
-                ref
-                    .read(updateControllerProvider.notifier)
-                    .installLatestUpdate();
+                try {
+                  await ref
+                      .read(updateControllerProvider.notifier)
+                      .installLatestUpdate();
+                } catch (error) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(this.context).showSnackBar(
+                      SnackBar(
+                        content:
+                            Text('Не удалось запустить обновление: $error'),
+                      ),
+                    );
+                  }
+                }
               },
               child: Text(actionLabel),
             ),

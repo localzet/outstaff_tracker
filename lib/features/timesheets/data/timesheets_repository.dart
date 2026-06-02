@@ -456,6 +456,18 @@ class TimesheetsRepository {
     );
   }
 
+  Future<void> deleteRemoteTimesheet(int kimaiTimesheetId) async {
+    await (_database.delete(_database.timesheets)
+          ..where((table) => table.id.equals(kimaiTimesheetId)))
+        .go();
+  }
+
+  Future<void> deleteLocalTimeEntry(String entryId) async {
+    await (_database.delete(_database.localTimeEntries)
+          ..where((table) => table.id.equals(entryId)))
+        .go();
+  }
+
   Future<List<String>> getAvailableActivities() async {
     final rows =
         await (_database.selectOnly(_database.timesheets, distinct: true)
@@ -498,6 +510,22 @@ class TimesheetsRepository {
     }
 
     return values.toList()..sort();
+  }
+
+  Stream<List<String>> watchAvailableTags() {
+    return _database
+        .customSelect(
+          'SELECT COUNT(*) AS c FROM kimai_tags '
+          'UNION ALL SELECT COUNT(*) FROM timesheets '
+          'UNION ALL SELECT COUNT(*) FROM local_time_entries',
+          readsFrom: {
+            _database.kimaiTags,
+            _database.timesheets,
+            _database.localTimeEntries,
+          },
+        )
+        .watch()
+        .asyncMap((_) => getAvailableTags());
   }
 
   Stream<TimesheetSummary> watchSummary(DateTime begin, DateTime end) {
@@ -704,6 +732,42 @@ class TimesheetsRepository {
         ],
       );
     });
+    await _closeLocalRunningEntriesFromRemote(timesheets);
+  }
+
+  Future<void> _closeLocalRunningEntriesFromRemote(
+    List<KimaiTimesheetDto> timesheets,
+  ) async {
+    final stopped = [
+      for (final item in timesheets)
+        if (item.endAt != null) item,
+    ];
+    if (stopped.isEmpty) {
+      return;
+    }
+
+    final now = DateTime.now().toUtc();
+    await _database.batch((batch) {
+      for (final item in stopped) {
+        batch.update(
+          _database.localTimeEntries,
+          LocalTimeEntriesCompanion(
+            endAt: Value(item.endAt),
+            durationSeconds:
+                Value(item.durationSeconds < 60 ? 60 : item.durationSeconds),
+            status: Value(LocalTimeEntryStatus.synced.storageValue),
+            lastSyncError: const Value(null),
+            updatedAt: Value(now),
+          ),
+          where: (table) =>
+              table.kimaiTimesheetId.equals(item.id) &
+              (table.status
+                      .equals(LocalTimeEntryStatus.runningSynced.storageValue) |
+                  table.status
+                      .equals(LocalTimeEntryStatus.stopFailed.storageValue)),
+        );
+      }
+    });
   }
 
   Future<int> reconcileRemoteDeletions({
@@ -725,9 +789,30 @@ class TimesheetsRepository {
       return 0;
     }
 
+    await _markRemoteDeletionConflicts(idsToDelete);
+
     return (_database.delete(_database.timesheets)
           ..where((table) => table.id.isIn(idsToDelete)))
         .go();
+  }
+
+  Future<void> _markRemoteDeletionConflicts(List<int> kimaiTimesheetIds) async {
+    final now = DateTime.now().toUtc();
+    await _database.customUpdate(
+      "UPDATE local_time_entries "
+      "SET status = ?, sync_attempts = sync_attempts + 1, "
+      "last_sync_error = ?, updated_at = ? "
+      "WHERE kimai_timesheet_id IN (${kimaiTimesheetIds.map((_) => '?').join(',')}) "
+      "AND status IN ('sync_pending', 'sync_failed', 'stop_failed', "
+      "'edit_failed', 'running_synced')",
+      variables: [
+        Variable(LocalTimeEntryStatus.conflict.storageValue),
+        Variable('Remote Kimai timesheet is missing during reconciliation.'),
+        Variable(now),
+        for (final id in kimaiTimesheetIds) Variable(id),
+      ],
+      updates: {_database.localTimeEntries},
+    );
   }
 
   Future<void> upsertKimaiTags(List<KimaiTagDto> tags) async {
@@ -1060,9 +1145,6 @@ class TimesheetsRepository {
               LocalTimeEntryStatus.syncingStart.storageValue,
             ) |
             _database.localTimeEntries.status.equals(
-              LocalTimeEntryStatus.runningSynced.storageValue,
-            ) |
-            _database.localTimeEntries.status.equals(
               LocalTimeEntryStatus.runningLocal.storageValue,
             ) |
             _database.localTimeEntries.status.equals(
@@ -1300,12 +1382,25 @@ int _displayRemoteDuration(Timesheet entry) {
 }
 
 int _displayDuration(LocalTimeEntry entry) {
-  if (entry.status == LocalTimeEntryStatus.running.storageValue) {
+  if (_isOpenLocalEntry(entry)) {
     final seconds = DateTime.now().toUtc().difference(entry.beginAt).inSeconds;
     return seconds < 60 ? 60 : seconds;
   }
 
   return entry.durationSeconds < 60 ? 60 : entry.durationSeconds;
+}
+
+bool _isOpenLocalEntry(LocalTimeEntry entry) {
+  if (entry.endAt != null) {
+    return false;
+  }
+
+  return entry.status == LocalTimeEntryStatus.running.storageValue ||
+      entry.status == LocalTimeEntryStatus.starting.storageValue ||
+      entry.status == LocalTimeEntryStatus.syncingStart.storageValue ||
+      entry.status == LocalTimeEntryStatus.runningSynced.storageValue ||
+      entry.status == LocalTimeEntryStatus.runningLocal.storageValue ||
+      entry.status == LocalTimeEntryStatus.syncFailed.storageValue;
 }
 
 void _validateEditWindow(DateTime beginAt, DateTime endAt) {

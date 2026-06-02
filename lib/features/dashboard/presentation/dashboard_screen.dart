@@ -262,11 +262,12 @@ class _DashboardTimerCardState extends State<DashboardTimerCard> {
                   '${formatDurationSeconds(durationSeconds)}',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
-                if (!entry.isLocal)
-                  Text(
-                    'Активная запись Kimai',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
+                Text(
+                  _timerStatusLabel(entry),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: _timerStatusColor(entry),
+                      ),
+                ),
               ],
             ),
           ),
@@ -816,4 +817,30 @@ Color _parseColor(String? value) {
   }
 
   return Color(0xFF000000 | parsed);
+}
+
+String _timerStatusLabel(ActiveTimeEntry entry) {
+  final status = entry.status;
+  if (!entry.isLocal) {
+    return 'Идёт в Kimai';
+  }
+  if (status == LocalTimeEntryStatus.runningSynced) {
+    return 'Идёт в Kimai';
+  }
+  if (status == LocalTimeEntryStatus.syncFailed) {
+    return 'Ошибка отправки старта в Kimai';
+  }
+
+  return 'Идёт локально';
+}
+
+Color _timerStatusColor(ActiveTimeEntry entry) {
+  if (entry.status == LocalTimeEntryStatus.syncFailed) {
+    return AppColors.danger;
+  }
+  if (!entry.isLocal || entry.status == LocalTimeEntryStatus.runningSynced) {
+    return AppColors.accent;
+  }
+
+  return AppColors.warning;
 }

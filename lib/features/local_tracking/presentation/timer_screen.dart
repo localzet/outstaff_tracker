@@ -7,7 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/db/app_database.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_time_formats.dart';
+import '../../../core/utils/tags.dart';
 import '../../../core/widgets/app_screen.dart';
+import '../../timesheets/data/timesheets_repository.dart';
 import '../data/local_tracking_repository.dart';
 import '../data/local_tracking_sync_service.dart';
 
@@ -98,6 +100,7 @@ class _TimerScreenState extends ConsumerState<TimerScreen> {
                       onStartAtChanged: (value) =>
                           setState(() => _startAt = value),
                       onEndAtChanged: (value) => setState(() => _endAt = value),
+                      onTagsChanged: () => setState(() {}),
                       onStart: _startTimer,
                     )
                   : ActiveRemoteTimerPanel(entry: activeEntry),
@@ -331,6 +334,7 @@ class StartTimerPanel extends ConsumerWidget {
     required this.onCompletedModeChanged,
     required this.onStartAtChanged,
     required this.onEndAtChanged,
+    required this.onTagsChanged,
     required this.onStart,
     super.key,
   });
@@ -348,6 +352,7 @@ class StartTimerPanel extends ConsumerWidget {
   final ValueChanged<bool> onCompletedModeChanged;
   final ValueChanged<DateTime?> onStartAtChanged;
   final ValueChanged<DateTime?> onEndAtChanged;
+  final VoidCallback onTagsChanged;
   final VoidCallback onStart;
 
   @override
@@ -356,6 +361,7 @@ class StartTimerPanel extends ConsumerWidget {
     final activities = selectedProject == null
         ? const AsyncValue<List<TimerActivityOption>>.data([])
         : ref.watch(_timerActivitiesProvider(selectedProject!.kimaiProjectId));
+    final tags = ref.watch(_timerTagsProvider);
 
     return AppPanel(
       child: Column(
@@ -443,6 +449,29 @@ class StartTimerPanel extends ConsumerWidget {
                   decoration: const InputDecoration(labelText: 'Теги'),
                 ),
               ),
+              SizedBox(
+                width: 360,
+                child: tags.when(
+                  data: (items) => Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final tag in items.take(12))
+                        FilterChip(
+                          label: Text(tag),
+                          selected: parseTags(tagsController.text)
+                              .map((value) => value.toLowerCase())
+                              .contains(tag.toLowerCase()),
+                          onSelected: busy
+                              ? null
+                              : (_) => _toggleTag(tagsController, tag),
+                        ),
+                    ],
+                  ),
+                  loading: () => const SizedBox.shrink(),
+                  error: (error, stackTrace) => const SizedBox.shrink(),
+                ),
+              ),
               _DateTimeButton(
                 label: 'Начало',
                 value: startAt,
@@ -471,6 +500,21 @@ class StartTimerPanel extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  void _toggleTag(TextEditingController controller, String tag) {
+    final values = parseTags(controller.text).toList();
+    final index = values.indexWhere(
+      (value) => value.toLowerCase() == tag.toLowerCase(),
+    );
+    if (index >= 0) {
+      values.removeAt(index);
+    } else {
+      values.add(tag);
+    }
+
+    controller.text = formatTags(values) ?? '';
+    onTagsChanged();
   }
 }
 
@@ -878,4 +922,8 @@ final _timerActivitiesProvider = FutureProvider.autoDispose
   return ref
       .watch(localTrackingRepositoryProvider)
       .getActivityOptions(kimaiProjectId);
+});
+
+final _timerTagsProvider = StreamProvider.autoDispose<List<String>>((ref) {
+  return ref.watch(timesheetsRepositoryProvider).watchAvailableTags();
 });

@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:outstaff_tracker/core/db/app_database.dart';
+import 'package:outstaff_tracker/features/local_tracking/data/local_tracking_repository.dart';
 import 'package:outstaff_tracker/features/payments/data/payments_repository.dart';
 import 'package:outstaff_tracker/features/projects/data/projects_repository.dart';
 import 'package:outstaff_tracker/features/timesheets/data/timesheets_repository.dart';
@@ -140,5 +141,37 @@ void main() {
         await TimesheetsRepository(database).getWeeklyProgressHistory(weeks: 1);
 
     expect(history.single.goalSeconds, 36000);
+  });
+
+  test('payments include running local and sync failed open entries', () async {
+    final begin = DateTime.now().toUtc().subtract(const Duration(hours: 2));
+    await database.into(database.localTimeEntries).insert(
+          LocalTimeEntriesCompanion.insert(
+            id: 'running_local',
+            projectId: 'kimai_1',
+            kimaiProjectId: 1,
+            beginAt: begin,
+            status: LocalTimeEntryStatus.runningLocal.storageValue,
+            createdAt: begin,
+            updatedAt: begin,
+          ),
+        );
+    await database.into(database.localTimeEntries).insert(
+          LocalTimeEntriesCompanion.insert(
+            id: 'sync_failed_open',
+            projectId: 'kimai_1',
+            kimaiProjectId: 1,
+            beginAt: begin,
+            status: LocalTimeEntryStatus.syncFailed.storageValue,
+            createdAt: begin,
+            updatedAt: begin,
+          ),
+        );
+
+    final snapshot = await payments.getPayments();
+    final active = snapshot.expected.firstWhere((item) => item.isActivePeriod);
+
+    expect(active.trackedSeconds, greaterThan(3600));
+    expect(active.expectedAmountMinor, greaterThan(10000));
   });
 }

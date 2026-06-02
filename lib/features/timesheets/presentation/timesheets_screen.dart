@@ -207,6 +207,7 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
             sortAscending: _sortAscending,
             onSort: _onSort,
             onEdit: _editTimesheet,
+            onDelete: _deleteTimesheet,
           ),
           loading: () => const LinearProgressIndicator(),
           error: (error, stackTrace) => EmptyState(
@@ -392,6 +393,48 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
       }
     }
   }
+
+  Future<void> _deleteTimesheet(TimesheetEntry entry) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удалить запись'),
+        content: Text(
+          entry.kimaiTimesheetId == null
+              ? 'Локальная запись будет удалена без отправки в Kimai.'
+              : 'Запись будет удалена в Kimai и затем скрыта локально.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      await ref.read(timesheetEditServiceProvider).delete(entry);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Запись удалена')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString())),
+        );
+      }
+    }
+  }
 }
 
 class TimesheetTotalsBar extends StatelessWidget {
@@ -434,6 +477,7 @@ class TimesheetsTable extends StatelessWidget {
     required this.sortAscending,
     required this.onSort,
     required this.onEdit,
+    required this.onDelete,
     super.key,
   });
 
@@ -442,6 +486,7 @@ class TimesheetsTable extends StatelessWidget {
   final bool sortAscending;
   final void Function(String key, bool ascending) onSort;
   final ValueChanged<TimesheetEntry> onEdit;
+  final ValueChanged<TimesheetEntry> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -547,12 +592,22 @@ class TimesheetsTable extends StatelessWidget {
         AppTableColumn(
           key: 'actions',
           label: '',
-          width: 64,
+          width: 96,
           sortable: false,
-          cellBuilder: (context, entry) => IconButton(
-            onPressed: entry.endAt == null ? null : () => onEdit(entry),
-            icon: const Icon(Icons.edit_rounded, size: 18),
-            tooltip: 'Изменить',
+          cellBuilder: (context, entry) => Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                onPressed: entry.endAt == null ? null : () => onEdit(entry),
+                icon: const Icon(Icons.edit_rounded, size: 18),
+                tooltip: 'Изменить',
+              ),
+              IconButton(
+                onPressed: entry.endAt == null ? null : () => onDelete(entry),
+                icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                tooltip: 'Удалить',
+              ),
+            ],
           ),
         ),
       ],
@@ -593,10 +648,20 @@ class TimesheetsTable extends StatelessWidget {
           ),
           Align(
             alignment: Alignment.centerRight,
-            child: IconButton(
-              onPressed: entry.endAt == null ? null : () => onEdit(entry),
-              icon: const Icon(Icons.edit_rounded, size: 18),
-              tooltip: 'Изменить',
+            child: Wrap(
+              spacing: 4,
+              children: [
+                IconButton(
+                  onPressed: entry.endAt == null ? null : () => onEdit(entry),
+                  icon: const Icon(Icons.edit_rounded, size: 18),
+                  tooltip: 'Изменить',
+                ),
+                IconButton(
+                  onPressed: entry.endAt == null ? null : () => onDelete(entry),
+                  icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                  tooltip: 'Удалить',
+                ),
+              ],
             ),
           ),
         ],
@@ -1074,8 +1139,8 @@ final _availableProjectsProvider =
       .getAvailableTimesheetProjects();
 });
 
-final _availableTagsProvider = FutureProvider.autoDispose<List<String>>((ref) {
-  return ref.watch(timesheetsRepositoryProvider).getAvailableTags();
+final _availableTagsProvider = StreamProvider.autoDispose<List<String>>((ref) {
+  return ref.watch(timesheetsRepositoryProvider).watchAvailableTags();
 });
 
 final _editActivitiesProvider = FutureProvider.autoDispose

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/db/app_database.dart';
 import '../../../core/network/kimai_api_client.dart';
 import '../../../core/network/network_providers.dart';
+import '../../../core/utils/tags.dart';
 import 'local_tracking_repository.dart';
 
 class LocalTrackingSyncResult {
@@ -111,7 +112,12 @@ class LocalTrackingSyncService {
 
       return stopped;
     } catch (error) {
-      await repository.markStopFailed(running.id, _diagnosticError(error));
+      await repository.markStopFailed(
+        id: running.id,
+        error: _diagnosticError(error),
+        beginAt: running.beginAt,
+        endAt: normalizedEnd,
+      );
       rethrow;
     }
   }
@@ -125,6 +131,44 @@ class LocalTrackingSyncService {
     var conflicts = 0;
 
     for (final entry in entries) {
+      if (entry.kimaiTimesheetId != null &&
+          entry.status == LocalTimeEntryStatus.stopFailed.storageValue) {
+        if (entry.endAt == null) {
+          failed++;
+          await repository.markSyncFailed(
+            entry.id,
+            'Cannot retry Kimai stop without end_at.',
+          );
+          continue;
+        }
+
+        try {
+          final remote = await client.stopTimesheet(
+            kimaiTimesheetId: entry.kimaiTimesheetId!,
+            endAt: entry.endAt!,
+          );
+          await repository.markSynced(
+            entry: entry.copyWith(
+              endAt: Value(remote.endAt ?? entry.endAt),
+              durationSeconds: remote.durationSeconds > 0
+                  ? remote.durationSeconds
+                  : entry.durationSeconds,
+            ),
+            kimaiTimesheetId: entry.kimaiTimesheetId!,
+          );
+          synced++;
+        } catch (error) {
+          failed++;
+          await repository.markStopFailed(
+            id: entry.id,
+            error: _diagnosticError(error),
+            beginAt: entry.beginAt,
+            endAt: entry.endAt,
+          );
+        }
+        continue;
+      }
+
       if (entry.kimaiTimesheetId != null) {
         conflicts++;
         await repository.markConflict(
@@ -223,6 +267,7 @@ class LocalTrackingSyncService {
         return remote;
       }
       final description = remote.description ?? '';
+      final sameActivity = remote.activityId == entry.activityId;
       final sameWindow =
           remote.beginAt.difference(entry.beginAt).inSeconds.abs() <= 1 &&
               remote.endAt != null &&
@@ -231,7 +276,13 @@ class LocalTrackingSyncService {
           (remote.durationSeconds - entry.durationSeconds).abs() <= 1;
       final sameDescription =
           description.trim() == (entry.description ?? '').trim();
-      if (sameWindow && sameDuration && sameDescription) {
+      final sameTags =
+          _normalizedTags(remote.tags) == _normalizedTags(entry.tags);
+      if (sameActivity &&
+          sameWindow &&
+          sameDuration &&
+          sameDescription &&
+          sameTags) {
         return remote;
       }
     }
@@ -270,6 +321,13 @@ class LocalTrackingSyncService {
     }
 
     return error;
+  }
+
+  String _normalizedTags(String? value) {
+    final parsed = parseTags(value)
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+    return parsed.map((tag) => tag.toLowerCase()).join(',');
   }
 }
 

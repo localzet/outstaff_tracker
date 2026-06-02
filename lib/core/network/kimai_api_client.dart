@@ -524,6 +524,7 @@ class KimaiRequestErrorDetails {
     required this.method,
     required this.path,
     required this.queryParameters,
+    this.requestBody,
     required this.statusCode,
     required this.responseBody,
   });
@@ -541,6 +542,7 @@ class KimaiRequestErrorDetails {
       method: method,
       path: path,
       queryParameters: queryParameters,
+      requestBody: sanitizeKimaiRequestBody(error.requestOptions.data),
       statusCode: error.response?.statusCode,
       responseBody: stringifyKimaiResponseData(error.response?.data),
     );
@@ -551,6 +553,7 @@ class KimaiRequestErrorDetails {
   final String method;
   final String path;
   final Map<String, Object> queryParameters;
+  final Object? requestBody;
   final int? statusCode;
   final String responseBody;
 
@@ -566,10 +569,39 @@ class KimaiRequestErrorDetails {
       'method=$method',
       'path=$path',
       'query_parameters=$queryParameters',
+      if (requestBody != null) 'request_body=$requestBody',
       'status_code=${statusCode ?? 'unknown'}',
       'response_body=$responseBody',
     ].join('\n');
   }
+}
+
+Object? sanitizeKimaiRequestBody(Object? data) {
+  const sensitiveKeys = {
+    'token',
+    'apiToken',
+    'password',
+    'Authorization',
+    'authorization',
+  };
+
+  Object? sanitize(Object? value) {
+    if (value is Map) {
+      return {
+        for (final entry in value.entries)
+          entry.key.toString(): sensitiveKeys.contains(entry.key.toString())
+              ? '<redacted>'
+              : sanitize(entry.value),
+      };
+    }
+    if (value is List) {
+      return value.map(sanitize).toList(growable: false);
+    }
+
+    return value;
+  }
+
+  return sanitize(data);
 }
 
 String stringifyKimaiResponseData(Object? data) {

@@ -80,6 +80,7 @@ class ActiveTimeEntry {
     required this.beginAt,
     required this.isLocal,
     this.kimaiTimesheetId,
+    this.status,
     this.activityName,
     this.description,
   });
@@ -87,6 +88,7 @@ class ActiveTimeEntry {
   final String id;
   final int? kimaiTimesheetId;
   final String projectName;
+  final LocalTimeEntryStatus? status;
   final String? activityName;
   final String? description;
   final DateTime beginAt;
@@ -124,6 +126,7 @@ class LocalTrackingRepository {
         .customSelect(
           'SELECT COUNT(*) AS c FROM local_time_entries '
           "WHERE status IN ('starting', 'syncing_start', 'running', 'running_synced', 'running_local') "
+          "OR (status = 'sync_failed' AND end_at IS NULL) "
           'UNION ALL SELECT COUNT(*) FROM timesheets WHERE end_at IS NULL',
           readsFrom: {_database.localTimeEntries, _database.timesheets},
         )
@@ -181,7 +184,11 @@ class LocalTrackingRepository {
             ) |
             _database.localTimeEntries.status.equals(
               LocalTimeEntryStatus.runningLocal.storageValue,
-            ),
+            ) |
+            (_database.localTimeEntries.status.equals(
+                  LocalTimeEntryStatus.syncFailed.storageValue,
+                ) &
+                _database.localTimeEntries.endAt.isNull()),
       )
       ..orderBy([
         OrderingTerm.desc(_database.localTimeEntries.beginAt),
@@ -199,6 +206,7 @@ class LocalTrackingRepository {
       projectName: row.readTableOrNull(_database.kimaiProjects)?.name ??
           row.readTableOrNull(_database.appProjects)?.name ??
           'Unknown project',
+      status: LocalTimeEntryStatus.fromStorage(entry.status),
       activityName: entry.activityName,
       description: entry.description,
       beginAt: entry.beginAt,
@@ -511,6 +519,7 @@ class LocalTrackingRepository {
             id: Value(kimaiTimesheetId),
             kimaiProjectId: Value(entry.kimaiProjectId),
             appProjectId: Value(entry.projectId),
+            activityId: Value(entry.activityId),
             activityName: Value(entry.activityName),
             description: Value(entry.description),
             tags: Value(entry.tags),
@@ -522,19 +531,36 @@ class LocalTrackingRepository {
         );
   }
 
-  Future<void> markStopFailed(String id, Object error) {
+  Future<void> markStopFailed({
+    required String id,
+    required Object error,
+    DateTime? endAt,
+    DateTime? beginAt,
+  }) async {
     final now = DateTime.now().toUtc();
+    final normalizedEnd = beginAt == null || endAt == null
+        ? null
+        : _normalizedEndAt(beginAt, endAt);
 
-    return _database.customUpdate(
-      'UPDATE local_time_entries '
-      'SET status = ?, sync_attempts = sync_attempts + 1, '
-      'last_sync_error = ?, updated_at = ? WHERE id = ?',
-      variables: [
-        Variable(LocalTimeEntryStatus.stopFailed.storageValue),
-        Variable(error.toString()),
-        Variable(now),
-        Variable(id),
-      ],
+    await (_database.update(_database.localTimeEntries)
+          ..where((table) => table.id.equals(id)))
+        .write(
+      LocalTimeEntriesCompanion(
+        endAt:
+            normalizedEnd == null ? const Value.absent() : Value(normalizedEnd),
+        durationSeconds: normalizedEnd == null || beginAt == null
+            ? const Value.absent()
+            : Value(_durationSeconds(beginAt, normalizedEnd)),
+        status: Value(LocalTimeEntryStatus.stopFailed.storageValue),
+        syncAttempts: const Value.absent(),
+        lastSyncError: Value(error.toString()),
+        updatedAt: Value(now),
+      ),
+    );
+    await _database.customUpdate(
+      'UPDATE local_time_entries SET sync_attempts = sync_attempts + 1 '
+      'WHERE id = ?',
+      variables: [Variable(id)],
       updates: {_database.localTimeEntries},
     );
   }
@@ -562,6 +588,7 @@ class LocalTrackingRepository {
               id: Value(kimaiTimesheetId),
               kimaiProjectId: Value(entry.kimaiProjectId),
               appProjectId: Value(entry.projectId),
+              activityId: Value(entry.activityId),
               activityName: Value(entry.activityName),
               description: Value(entry.description),
               tags: Value(entry.tags),
@@ -753,5 +780,7 @@ Expression<bool> _runningStatusExpression(LocalTimeEntries table) {
       table.status.equals(LocalTimeEntryStatus.starting.storageValue) |
       table.status.equals(LocalTimeEntryStatus.syncingStart.storageValue) |
       table.status.equals(LocalTimeEntryStatus.runningSynced.storageValue) |
-      table.status.equals(LocalTimeEntryStatus.runningLocal.storageValue);
+      table.status.equals(LocalTimeEntryStatus.runningLocal.storageValue) |
+      (table.status.equals(LocalTimeEntryStatus.syncFailed.storageValue) &
+          table.endAt.isNull());
 }

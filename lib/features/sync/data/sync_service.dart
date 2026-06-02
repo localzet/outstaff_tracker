@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/db/app_database.dart';
 import '../../../core/network/kimai_api_client.dart';
 import '../../../core/network/network_providers.dart';
+import '../../../core/utils/tags.dart';
 import '../../projects/data/projects_repository.dart';
 import '../../timesheets/data/timesheets_repository.dart';
 
@@ -130,6 +131,7 @@ class SyncService {
       var remoteEntriesFetched = 0;
       final failures = <String>[];
       final projectReports = <String>[];
+      final derivedTags = <String>{};
       var completedProjects = 0;
       final preservedLocalQueueEntries = await _countPreservedLocalQueue(
         database,
@@ -170,6 +172,9 @@ class SyncService {
           final projectEntries = projectEntriesById.values.toList(
             growable: false,
           );
+          for (final entry in projectEntries) {
+            derivedTags.addAll(parseTags(entry.tags));
+          }
           await timesheetsRepository.upsertRemoteTimesheets(
             projectEntries,
             enabledProjects,
@@ -220,6 +225,7 @@ class SyncService {
           completedProjects += 1;
         }
       }
+      await _syncDerivedTags(timesheetsRepository, derivedTags);
 
       final finishedAt = DateTime.now().toUtc();
       final status = failures.isEmpty ? 'success' : 'partial';
@@ -322,6 +328,19 @@ class SyncService {
         rethrow;
       }
     }
+  }
+
+  Future<void> _syncDerivedTags(
+    TimesheetsRepository timesheetsRepository,
+    Set<String> tags,
+  ) async {
+    if (tags.isEmpty) {
+      return;
+    }
+
+    await timesheetsRepository.upsertKimaiTags([
+      for (final tag in tags) KimaiTagDto(id: tag, name: tag),
+    ]);
   }
 
   Future<int> _countPreservedLocalQueue(
@@ -495,6 +514,7 @@ class SyncService {
           for (final entry in request.queryParameters.entries)
             if (entry.value != null) entry.key: entry.value as Object,
         },
+        requestBody: sanitizeKimaiRequestBody(request.data),
         statusCode: error.response?.statusCode,
         responseBody: stringifyKimaiResponseData(error.response?.data),
       ).toDiagnosticString(projectId: projectId, syncType: mode.name);

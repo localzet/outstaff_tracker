@@ -60,6 +60,37 @@ class TimesheetEditService {
     }
   }
 
+  Future<void> delete(TimesheetEntry entry) async {
+    final repository = _ref.read(timesheetsRepositoryProvider);
+    final kimaiTimesheetId = entry.kimaiTimesheetId;
+
+    if (kimaiTimesheetId == null) {
+      await repository.deleteLocalTimeEntry(entry.id);
+      return;
+    }
+
+    try {
+      final client = await _ref.read(kimaiApiClientProvider.future);
+      await client.deleteTimesheet(kimaiTimesheetId);
+      if (entry.isLocal) {
+        await repository.deleteLocalTimeEntry(entry.id);
+      }
+      await repository.deleteRemoteTimesheet(kimaiTimesheetId);
+    } catch (error) {
+      if (_isAlreadyDeleted(error)) {
+        if (entry.isLocal) {
+          await repository.deleteLocalTimeEntry(entry.id);
+        }
+        await repository.deleteRemoteTimesheet(kimaiTimesheetId);
+        return;
+      }
+      throw TimesheetEditException(
+        'Не удалось удалить запись в Kimai. Локальные данные не изменены.',
+        _diagnosticError(error),
+      );
+    }
+  }
+
   void _validate(TimesheetEditInput input) {
     if (!input.endAt.isAfter(input.beginAt)) {
       throw const TimesheetEditException('Окончание должно быть позже начала.');
@@ -83,6 +114,14 @@ class TimesheetEditService {
     }
 
     return 'Не удалось изменить запись в Kimai. Локальные данные не изменены.';
+  }
+
+  bool _isAlreadyDeleted(Object error) {
+    if (error is KimaiApiException) {
+      return error.details.statusCode == 404 || error.details.statusCode == 410;
+    }
+
+    return false;
   }
 
   Object _diagnosticError(Object error) {

@@ -121,6 +121,45 @@ void main() {
     expect(entry.durationSeconds, greaterThanOrEqualTo(300));
   });
 
+  test('running synced local entry is not duplicated with remote row',
+      () async {
+    final begin = DateTime.now().toUtc().subtract(const Duration(minutes: 5));
+    await database.into(database.timesheets).insert(
+          TimesheetsCompanion.insert(
+            id: const Value(402),
+            kimaiProjectId: const Value(1),
+            appProjectId: const Value('kimai_1'),
+            beginAt: begin,
+            durationSeconds: const Value(0),
+            syncedAt: begin,
+          ),
+        );
+    await database.into(database.localTimeEntries).insert(
+          LocalTimeEntriesCompanion.insert(
+            id: 'local_running_402',
+            kimaiTimesheetId: const Value(402),
+            projectId: 'kimai_1',
+            kimaiProjectId: 1,
+            beginAt: begin,
+            status: LocalTimeEntryStatus.runningSynced.storageValue,
+            createdAt: begin,
+            updatedAt: begin,
+          ),
+        );
+
+    final entries = await repository.getTimesheetsFiltered(
+      TimesheetFilters(
+        begin: begin.subtract(const Duration(minutes: 1)),
+        end: DateTime.now().add(const Duration(minutes: 1)),
+      ),
+    );
+
+    expect(
+      entries.where((item) => item.kimaiTimesheetId == 402),
+      hasLength(1),
+    );
+  });
+
   test('applies rate history only for matching effective period', () async {
     await database.into(database.projectRateHistory).insert(
           ProjectRateHistoryCompanion.insert(
@@ -399,6 +438,75 @@ void main() {
     expect(row.description, 'Feature work');
     expect(row.tags, null);
     expect(row.beginAt.toUtc(), DateTime.utc(2026, 5, 1, 9));
+  });
+
+  test('full sync removes local synced entry deleted from Kimai', () async {
+    final removed = await repository.reconcileRemoteDeletions(
+      kimaiProjectId: 1,
+      begin: DateTime.utc(2026, 5),
+      end: DateTime.utc(2026, 6),
+      remoteTimesheetIds: const {},
+    );
+    final rows = await database.select(database.timesheets).get();
+
+    expect(removed, 1);
+    expect(rows, isEmpty);
+  });
+
+  test('full sync does not remove local sync pending entry', () async {
+    await database.into(database.localTimeEntries).insert(
+          LocalTimeEntriesCompanion.insert(
+            id: 'local_1',
+            projectId: 'kimai_1',
+            kimaiProjectId: 1,
+            beginAt: DateTime.utc(2026, 5, 1, 11),
+            endAt: Value(DateTime.utc(2026, 5, 1, 12)),
+            durationSeconds: const Value(3600),
+            status: LocalTimeEntryStatus.syncPending.storageValue,
+            createdAt: DateTime.utc(2026, 5, 1, 11),
+            updatedAt: DateTime.utc(2026, 5, 1, 11),
+          ),
+        );
+
+    await repository.reconcileRemoteDeletions(
+      kimaiProjectId: 1,
+      begin: DateTime.utc(2026, 5),
+      end: DateTime.utc(2026, 6),
+      remoteTimesheetIds: const {},
+    );
+    final local = await database.select(database.localTimeEntries).getSingle();
+
+    expect(local.status, LocalTimeEntryStatus.syncPending.storageValue);
+    expect(local.kimaiTimesheetId, null);
+  });
+
+  test('pending local edit conflicts when remote timesheet is missing',
+      () async {
+    await database.into(database.localTimeEntries).insert(
+          LocalTimeEntriesCompanion.insert(
+            id: 'local_edit_101',
+            kimaiTimesheetId: const Value(101),
+            projectId: 'kimai_1',
+            kimaiProjectId: 1,
+            beginAt: DateTime.utc(2026, 5, 1, 9),
+            endAt: Value(DateTime.utc(2026, 5, 1, 10)),
+            durationSeconds: const Value(3600),
+            status: LocalTimeEntryStatus.editFailed.storageValue,
+            createdAt: DateTime.utc(2026, 5, 1, 9),
+            updatedAt: DateTime.utc(2026, 5, 1, 9),
+          ),
+        );
+
+    await repository.reconcileRemoteDeletions(
+      kimaiProjectId: 1,
+      begin: DateTime.utc(2026, 5),
+      end: DateTime.utc(2026, 6),
+      remoteTimesheetIds: const {},
+    );
+    final local = await database.select(database.localTimeEntries).getSingle();
+
+    expect(local.status, LocalTimeEntryStatus.conflict.storageValue);
+    expect(local.lastSyncError, contains('Remote Kimai timesheet is missing'));
   });
 }
 

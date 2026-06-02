@@ -56,6 +56,9 @@ class ConnectivityDiagnosticsService {
       allowInsecureHttp: settings.allowInsecureKimaiHttp,
     );
     final uri = Uri.parse(baseUrl);
+    final versionUri = Uri.parse(
+      baseUrl.endsWith('/') ? '${baseUrl}version' : '$baseUrl/version',
+    );
     var hostResolution = 'Не проверено';
     try {
       hostResolution = await resolveHostForDiagnostics(uri.host);
@@ -65,7 +68,7 @@ class ConnectivityDiagnosticsService {
 
     try {
       final response = await _dio.getUri<Object?>(
-        uri,
+        versionUri,
         options: Options(
           headers: const {'Accept': 'application/json'},
           responseType: ResponseType.plain,
@@ -78,7 +81,8 @@ class ConnectivityDiagnosticsService {
         hostResolution: hostResolution,
         reachable: true,
         statusCode: response.statusCode,
-        summary: 'Kimai отвечает. HTTP ${response.statusCode ?? 'без кода'}.',
+        summary:
+            'Kimai version endpoint отвечает. HTTP ${response.statusCode ?? 'без кода'}.',
       );
     } on DioException catch (error) {
       return ConnectivityDiagnosticResult(

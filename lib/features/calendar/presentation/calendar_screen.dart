@@ -9,7 +9,9 @@ import '../../../core/utils/date_time_formats.dart';
 import '../../../core/utils/tags.dart';
 import '../../../core/widgets/app_progress_bar.dart';
 import '../../../core/widgets/app_screen.dart';
+import '../../timesheets/data/timesheet_edit_service.dart';
 import '../../timesheets/data/timesheets_repository.dart';
+import '../../timesheets/presentation/timesheets_screen.dart';
 
 const _hourHeight = 72.0;
 const _hourLabelWidth = 68.0;
@@ -839,13 +841,13 @@ class CurrentTimeIndicator extends StatelessWidget {
   }
 }
 
-class TimesheetDetailDialog extends StatelessWidget {
+class TimesheetDetailDialog extends ConsumerWidget {
   const TimesheetDetailDialog({required this.entry, super.key});
 
   final TimesheetEntry entry;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final begin = entry.beginAt.toLocal();
     final end = entry.endAt?.toLocal();
 
@@ -916,9 +918,28 @@ class TimesheetDetailDialog extends StatelessWidget {
               const SizedBox(height: 16),
               Align(
                 alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Закрыть'),
+                child: Wrap(
+                  spacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: entry.endAt == null
+                          ? null
+                          : () => _edit(context, ref),
+                      icon: const Icon(Icons.edit_rounded, size: 18),
+                      label: const Text('Изменить'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: entry.endAt == null
+                          ? null
+                          : () => _delete(context, ref),
+                      icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                      label: const Text('Удалить'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Закрыть'),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -926,6 +947,85 @@ class TimesheetDetailDialog extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _edit(BuildContext context, WidgetRef ref) async {
+    final projects = await ref
+        .read(timesheetsRepositoryProvider)
+        .getAvailableTimesheetProjects();
+    if (!context.mounted) {
+      return;
+    }
+
+    final input = await showDialog<TimesheetEditInput>(
+      context: context,
+      builder: (context) => TimesheetEditDialog(
+        entry: entry,
+        projects: projects,
+      ),
+    );
+    if (input == null) {
+      return;
+    }
+
+    try {
+      await ref.read(timesheetEditServiceProvider).save(input);
+      if (context.mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Запись сохранена')),
+        );
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString())),
+        );
+      }
+    }
+  }
+
+  Future<void> _delete(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удалить запись'),
+        content: Text(
+          entry.kimaiTimesheetId == null
+              ? 'Локальная запись будет удалена без отправки в Kimai.'
+              : 'Запись будет удалена в Kimai и затем скрыта локально.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      await ref.read(timesheetEditServiceProvider).delete(entry);
+      if (context.mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Запись удалена')),
+        );
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString())),
+        );
+      }
+    }
   }
 }
 
