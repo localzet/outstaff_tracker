@@ -24,6 +24,14 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Apply release tag version
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          PUBSPEC_VERSION="${VERSION}+${GITHUB_RUN_NUMBER}"
+          sed -i -E "s/^version: .+$/version: ${PUBSPEC_VERSION}/" pubspec.yaml
+
       - name: Install dependencies
         run: flutter pub get
 
@@ -65,6 +73,8 @@ jobs:
             $version = $line.Matches[0].Groups[1].Value.Split('+')[0]
           }
           $buildNumber = $env:GITHUB_RUN_NUMBER
+          $pubspecVersion = "$version+$buildNumber"
+          (Get-Content pubspec.yaml) -replace '^version:\s*.+$', "version: $pubspecVersion" | Set-Content pubspec.yaml
           "version=$version" >> $env:GITHUB_OUTPUT
           "build_number=$buildNumber" >> $env:GITHUB_OUTPUT
           "VERSION=$version" >> $env:GITHUB_ENV
@@ -283,6 +293,8 @@ jobs:
             VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)"
           fi
           BUILD_NUMBER="${GITHUB_RUN_NUMBER}"
+          PUBSPEC_VERSION="${VERSION}+${BUILD_NUMBER}"
+          sed -i -E "s/^version: .+$/version: ${PUBSPEC_VERSION}/" pubspec.yaml
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "build_number=${BUILD_NUMBER}" >> "${GITHUB_OUTPUT}"
           echo "VERSION=${VERSION}" >> "${GITHUB_ENV}"
@@ -316,65 +328,12 @@ jobs:
             release/outstaff_tracker-android-${{ steps.version.outputs.version }}.aab
           if-no-files-found: error
 
-  build-web:
-    name: Build Web
-    runs-on: ubuntu-latest
-    needs: validate
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Resolve version
-        id: version
-        shell: bash
-        run: |
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-          else
-            VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)"
-          fi
-          BUILD_NUMBER="${GITHUB_RUN_NUMBER}"
-          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
-          echo "build_number=${BUILD_NUMBER}" >> "${GITHUB_OUTPUT}"
-          echo "VERSION=${VERSION}" >> "${GITHUB_ENV}"
-          echo "BUILD_NUMBER=${BUILD_NUMBER}" >> "${GITHUB_ENV}"
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Generate Drift code
-        run: dart run build_runner build
-
-      - name: Build Web release
-        run: flutter build web --release --build-name "${VERSION}" --build-number "${BUILD_NUMBER}"
-
-      - name: Package Web artifacts
-        shell: bash
-        run: |
-          mkdir -p release
-          (cd build/web && zip -r "../../release/outstaff_tracker-web-${VERSION}.zip" .)
-
-      - name: Upload Web artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-${{ steps.version.outputs.version }}
-          path: release/outstaff_tracker-web-${{ steps.version.outputs.version }}.zip
-          if-no-files-found: error
-
   create-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs:
       - build-windows
       - build-android
-      - build-web
     if: startsWith(github.ref, 'refs/tags/')
 
     steps:
@@ -393,7 +352,7 @@ jobs:
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
           VERSION="${TAG#v}"
-          PUBSPEC_VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
+          PUBSPEC_VERSION="${VERSION}+${GITHUB_RUN_NUMBER}"
           REPOSITORY="${GITHUB_REPOSITORY}"
           RELEASE_URL="https://github.com/${REPOSITORY}/releases/tag/${TAG}"
           DOWNLOAD_BASE_URL="https://github.com/${REPOSITORY}/releases/download/${TAG}"

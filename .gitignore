@@ -4,6 +4,7 @@
 .flutter-plugins-dependencies
 .packages
 build/
+android/.gradle/
 
 # IDE
 .idea/
@@ -13,3 +14,9 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+# Release artifacts
+*.exe
+*.apk
+*.aab
+*.zip

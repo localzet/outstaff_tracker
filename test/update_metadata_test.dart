@@ -26,7 +26,7 @@ void main() {
       final metadata = UpdateMetadata.fromJson({
         'tag': 'v1.0.2',
         'version': '1.0.2',
-        'pubspecVersion': '0.1.0+1',
+        'pubspecVersion': '1.0.2+42',
         'publishedAt': '2026-06-01T00:00:00Z',
         'prerelease': false,
         'releaseNotesUrl':
@@ -56,6 +56,7 @@ void main() {
       );
       expect(metadata.windowsInstaller.sha256, 'abc123');
       expect(metadata.androidApk?.name, 'outstaff_tracker-android-1.0.2.apk');
+      expect(metadata.pubspecVersion, '1.0.2+42');
     });
 
     test('chooses installer asset and ignores portable zip', () {

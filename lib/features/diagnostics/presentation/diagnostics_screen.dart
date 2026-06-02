@@ -345,7 +345,7 @@ final _diagnosticsProvider = FutureProvider<_DiagnosticsData>((ref) async {
   final result = updateState.result;
 
   return _DiagnosticsData(
-    appVersion: '${packageInfo.version}+${packageInfo.buildNumber}',
+    appVersion: packageInfo.version,
     platform: result?.platformLabel ?? updatePlatformLabel(),
     updateChannel: 'stable',
     schemaVersion: database.schemaVersion.toString(),

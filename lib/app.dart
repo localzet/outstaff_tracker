@@ -192,7 +192,7 @@ class _AutoUpdateHostState extends ConsumerState<AutoUpdateHost> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Текущая версия: ${result.currentVersion}+${result.currentBuildNumber}',
+                'Текущая версия: ${result.currentVersion}',
               ),
               Text('Новая версия: ${result.metadata.version}'),
               Text('Платформа: ${result.platformLabel}'),

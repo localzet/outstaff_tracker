@@ -30,5 +30,6 @@ final kimaiApiClientProvider = FutureProvider<KimaiApiClient>((ref) async {
       settings.baseUrl,
       allowInsecureHttp: settings.allowInsecureKimaiHttp,
     ),
+    allowInsecureHttp: settings.allowInsecureKimaiHttp,
   );
 });

@@ -100,8 +100,8 @@ outstaff_tracker-setup-{version}.exe
 ```
 
 Android does not install updates silently. Use the APK/AAB release artifacts or
-store distribution later. Web builds are updated by redeploying the hosted web
-bundle.
+store distribution later. Web delivery is handled outside the GitHub ZIP release
+assets, for example by redeploying the hosted Docker/GHCR image.
 
 Create a release by pushing a semantic version tag:
 
@@ -116,7 +116,6 @@ GitHub Actions builds and attaches:
 - `outstaff_tracker-windows-portable-{version}.zip`
 - `outstaff_tracker-android-{version}.apk`
 - `outstaff_tracker-android-{version}.aab`
-- `outstaff_tracker-web-{version}.zip`
 - `SHA256SUMS.txt`
 - `latest.json`
 - `appcast.xml`

@@ -78,7 +78,7 @@ class UpdateController extends StateNotifier<UpdateControllerState> {
   Future<void> installLatestUpdate() {
     final result = state.result;
     if (result == null) {
-      throw StateError('Update check result is not available.');
+      throw StateError('Результат проверки обновлений недоступен.');
     }
 
     return _repository.installLatestUpdate(result);

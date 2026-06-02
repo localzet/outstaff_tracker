@@ -1213,7 +1213,7 @@ class TimesheetsRepository {
       durationSeconds: durationSeconds,
       projectName: row.readTableOrNull(_database.kimaiProjects)?.name ??
           row.readTableOrNull(_database.appProjects)?.name ??
-          'Unknown project',
+          'Неизвестный проект',
       projectColor: row.readTableOrNull(_database.appProjects)?.color ??
           row.readTableOrNull(_database.kimaiProjects)?.color,
       hourlyRateMinor: _displayRateMinor(
@@ -1262,7 +1262,7 @@ class TimesheetsRepository {
       durationSeconds: _displayDuration(entry),
       projectName: row.readTableOrNull(_database.kimaiProjects)?.name ??
           row.readTableOrNull(_database.appProjects)?.name ??
-          'Unknown project',
+          'Неизвестный проект',
       projectColor: row.readTableOrNull(_database.appProjects)?.color ??
           row.readTableOrNull(_database.kimaiProjects)?.color,
       hourlyRateMinor:

@@ -205,7 +205,7 @@ class LocalTrackingRepository {
       kimaiTimesheetId: entry.kimaiTimesheetId,
       projectName: row.readTableOrNull(_database.kimaiProjects)?.name ??
           row.readTableOrNull(_database.appProjects)?.name ??
-          'Unknown project',
+          'Неизвестный проект',
       status: LocalTimeEntryStatus.fromStorage(entry.status),
       activityName: entry.activityName,
       description: entry.description,
@@ -241,7 +241,7 @@ class LocalTrackingRepository {
       kimaiTimesheetId: entry.id,
       projectName: row.readTableOrNull(_database.kimaiProjects)?.name ??
           row.readTableOrNull(_database.appProjects)?.name ??
-          'Unknown project',
+          'Неизвестный проект',
       activityName: entry.activityName,
       description: entry.description,
       beginAt: entry.beginAt,
@@ -341,7 +341,7 @@ class LocalTrackingRepository {
       final running = await getRunningEntry();
       if (running != null) {
         throw StateError(
-          'Р Р€Р В¶Р Вµ Р В·Р В°Р С—РЎС“РЎвЂ°Р ВµР Р… РЎвЂљР В°Р в„–Р СР ВµРЎР‚. Р С›РЎРѓРЎвЂљР В°Р Р…Р С•Р Р†Р С‘РЎвЂљР Вµ Р ВµР С–Р С• Р С—Р ВµРЎР‚Р ВµР Т‘ РЎРѓРЎвЂљР В°РЎР‚РЎвЂљР С•Р С Р Р…Р С•Р Р†Р С•Р С–Р С•.',
+          'Уже запущен таймер. Остановите его перед стартом нового.',
         );
       }
 
@@ -351,7 +351,7 @@ class LocalTrackingRepository {
           .getSingleOrNull();
       if (project == null) {
         throw StateError(
-          'Р СџРЎР‚Р С•Р ВµР С”РЎвЂљ Р Р…Р ВµР Т‘Р С•РЎРѓРЎвЂљРЎС“Р С—Р ВµР Р… Р Т‘Р В»РЎРЏ Р В»Р С•Р С”Р В°Р В»РЎРЉР Р…Р С•Р С–Р С• РЎвЂљР В°Р в„–Р СР ВµРЎР‚Р В°.',
+          'Проект недоступен для локального таймера.',
         );
       }
 
@@ -395,7 +395,7 @@ class LocalTrackingRepository {
 
     if (!endAt.toUtc().isAfter(begin)) {
       throw StateError(
-        'Р С›Р С”Р С•Р Р…РЎвЂЎР В°Р Р…Р С‘Р Вµ Р Т‘Р С•Р В»Р В¶Р Р…Р С• Р В±РЎвЂ№РЎвЂљРЎРЉ Р С—Р С•Р В·Р В¶Р Вµ Р Р…Р В°РЎвЂЎР В°Р В»Р В°.',
+        'Окончание должно быть позже начала.',
       );
     }
 
@@ -434,7 +434,7 @@ class LocalTrackingRepository {
       final running = await getRunningEntry();
       if (running == null) {
         throw StateError(
-          'Р СњР ВµРЎвЂљ Р В·Р В°Р С—РЎС“РЎвЂ°Р ВµР Р…Р Р…Р С•Р С–Р С• РЎвЂљР В°Р в„–Р СР ВµРЎР‚Р В°.',
+          'Нет запущенного таймера.',
         );
       }
 
@@ -699,7 +699,7 @@ class LocalTrackingRepository {
         .getSingleOrNull();
     if (project == null) {
       throw StateError(
-        'Р СџРЎР‚Р С•Р ВµР С”РЎвЂљ Р Р…Р ВµР Т‘Р С•РЎРѓРЎвЂљРЎС“Р С—Р ВµР Р… Р Т‘Р В»РЎРЏ Р В»Р С•Р С”Р В°Р В»РЎРЉР Р…Р С•Р С–Р С• РЎвЂљР В°Р в„–Р СР ВµРЎР‚Р В°.',
+        'Проект недоступен для локального таймера.',
       );
     }
   }

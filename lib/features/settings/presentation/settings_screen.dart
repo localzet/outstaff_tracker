@@ -651,7 +651,7 @@ class UpdateStatusBlock extends ConsumerWidget {
                 const SizedBox(height: 6),
                 packageInfo.when(
                   data: (info) => Text(
-                    'Текущая версия: ${info.version}+${info.buildNumber}',
+                    'Текущая версия: ${info.version}',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   loading: () => const SizedBox.shrink(),

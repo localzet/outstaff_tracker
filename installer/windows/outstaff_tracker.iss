@@ -4,7 +4,7 @@
 #endif
 #define AppExeName "outstaff_tracker.exe"
 #ifndef AppVersion
-#define AppVersion "0.0.0"
+#define AppVersion "0.1.1"
 #endif
 #ifndef SourceDir
 #define SourceDir "..\..\build\windows\x64\runner\Release"

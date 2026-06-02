@@ -12,13 +12,16 @@ class KimaiApiClient {
     required Dio dio,
     required SecureTokenStorage tokenStorage,
     required String baseUrl,
+    bool allowInsecureHttp = false,
   })  : _dio = dio,
         _tokenStorage = tokenStorage,
-        _baseUrl = baseUrl;
+        _baseUrl = baseUrl,
+        _allowInsecureHttp = allowInsecureHttp;
 
   final Dio _dio;
   final SecureTokenStorage _tokenStorage;
   final String _baseUrl;
+  final bool _allowInsecureHttp;
 
   Future<bool> checkConnection() async {
     final response = await _request<Map<String, Object?>>(
@@ -262,10 +265,13 @@ class KimaiApiClient {
   }) async {
     final token = await _tokenStorage.readKimaiToken();
     if (token == null || token.trim().isEmpty) {
-      throw KimaiAuthenticationException('Kimai API token is not configured.');
+      throw KimaiAuthenticationException('API-ключ Kimai не настроен.');
     }
 
-    final normalizedBaseUrl = normalizeKimaiBaseUrl(_baseUrl);
+    final normalizedBaseUrl = normalizeKimaiBaseUrl(
+      _baseUrl,
+      allowInsecureHttp: _allowInsecureHttp,
+    );
     final endpoint = _buildEndpoint(normalizedBaseUrl, path);
     final sanitizedQuery = _sanitizeQuery(queryParameters);
 
@@ -817,7 +823,7 @@ class KimaiProjectDto {
 
     return KimaiProjectDto(
       id: _readInt(json['id']),
-      name: _readString(json['name']) ?? 'Untitled project',
+      name: _readString(json['name']) ?? 'Проект без названия',
       customerName: customer is Map<String, Object?>
           ? _readString(customer['name'])
           : _readString(json['customerName']),
@@ -851,7 +857,7 @@ class KimaiActivityDto {
       projectId: project is Map<String, Object?>
           ? _readNullableInt(project['id'])
           : _readNullableInt(json['project']),
-      name: _readString(json['name']) ?? 'Untitled activity',
+      name: _readString(json['name']) ?? 'Активность без названия',
       visible: _readBool(json['visible'], fallback: true),
     );
   }
