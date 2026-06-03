@@ -38,7 +38,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final complete =
           await ref.read(settingsRepositoryProvider).isOnboardingComplete();
       final onboarding = state.uri.path == OnboardingScreen.routePath;
-      if (!complete && !onboarding) {
+      final settings = state.uri.path == SettingsScreen.routePath;
+      if (!complete && !onboarding && !settings) {
         return OnboardingScreen.routePath;
       }
       if (complete && onboarding) {

@@ -22,69 +22,74 @@ class AppScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: CustomScrollView(
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-            sliver: SliverToBoxAdapter(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: maxContentWidth),
-                  child: Wrap(
-                    alignment: WrapAlignment.spaceBetween,
-                    runSpacing: AppSpacing.md,
-                    spacing: AppSpacing.md,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 720),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              title,
-                              style: Theme.of(context).textTheme.headlineMedium,
-                            ),
-                            if (subtitle != null) ...[
-                              const SizedBox(height: 6),
+    return ColoredBox(
+      color: AppColors.background,
+      child: SafeArea(
+        child: CustomScrollView(
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+              sliver: SliverToBoxAdapter(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: maxContentWidth),
+                    child: Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      runSpacing: AppSpacing.md,
+                      spacing: AppSpacing.md,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 720),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                               Text(
-                                subtitle!,
-                                style: Theme.of(context).textTheme.bodyMedium,
+                                title,
+                                style:
+                                    Theme.of(context).textTheme.headlineMedium,
                               ),
+                              if (subtitle != null) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  subtitle!,
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
-                      ),
-                      if (actions.isNotEmpty)
-                        Wrap(spacing: 8, runSpacing: 8, children: actions),
-                    ],
+                        if (actions.isNotEmpty)
+                          Wrap(spacing: 8, runSpacing: 8, children: actions),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-            sliver: SliverList.separated(
-              itemCount: children.length,
-              itemBuilder: (context, index) {
-                final child = children[index];
-                if (expandContent) {
-                  return child;
-                }
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+              sliver: SliverList.separated(
+                itemCount: children.length,
+                itemBuilder: (context, index) {
+                  final child = children[index];
+                  if (expandContent) {
+                    return child;
+                  }
 
-                return Center(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: maxContentWidth),
-                    child: child,
-                  ),
-                );
-              },
-              separatorBuilder: (context, index) => const SizedBox(height: 16),
+                  return Center(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: maxContentWidth),
+                      child: child,
+                    ),
+                  );
+                },
+                separatorBuilder: (context, index) =>
+                    const SizedBox(height: 16),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

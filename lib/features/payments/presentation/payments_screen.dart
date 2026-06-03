@@ -372,11 +372,25 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
     };
   }
 
-  Future<void> _markPaid(PaymentItem item) {
-    return ref.read(paymentsRepositoryProvider).markPaid(item);
+  Future<void> _markPaid(PaymentItem item) async {
+    try {
+      await ref.read(paymentsRepositoryProvider).markPaid(item);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Выплата отмечена как оплаченная')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось обновить выплату: $error')),
+        );
+      }
+    }
   }
 
   Future<void> _showEditDialog(PaymentItem item) async {
+    final formKey = GlobalKey<FormState>();
     final amountController = TextEditingController(
       text: ((item.actualAmountMinor ?? item.expectedAmountMinor) / 100)
           .toStringAsFixed(0),
@@ -389,38 +403,45 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
           title: const Text('Редактировать выплату'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<PaymentStatus>(
-                initialValue: status,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Статус'),
-                items: [
-                  for (final value in PaymentStatus.values)
-                    DropdownMenuItem(
-                      value: value,
-                      child: Text(value.label, overflow: TextOverflow.ellipsis),
-                    ),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => status = value);
-                  }
-                },
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: amountController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Сумма, ₽'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: noteController,
-                decoration: const InputDecoration(labelText: 'Заметка'),
-              ),
-            ],
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<PaymentStatus>(
+                  initialValue: status,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Статус'),
+                  items: [
+                    for (final value in PaymentStatus.values)
+                      DropdownMenuItem(
+                        value: value,
+                        child:
+                            Text(value.label, overflow: TextOverflow.ellipsis),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => status = value);
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: amountController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(labelText: 'Сумма, ₽'),
+                  validator: _validatePaymentAmount,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: noteController,
+                  decoration: const InputDecoration(labelText: 'Заметка'),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -428,7 +449,11 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
               child: const Text('Отмена'),
             ),
             FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
+              onPressed: () {
+                if (formKey.currentState?.validate() ?? false) {
+                  Navigator.of(context).pop(true);
+                }
+              },
               child: const Text('Сохранить'),
             ),
           ],
@@ -436,27 +461,56 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
       ),
     );
 
-    if (saved != true) {
+    try {
+      if (saved != true) {
+        return;
+      }
+
+      final amountText = amountController.text.trim().replaceAll(',', '.');
+      final amount = amountText.isEmpty ? null : double.parse(amountText);
+      await ref.read(paymentsRepositoryProvider).updatePayment(
+            item,
+            status: status,
+            actualAmountMinor: amount == null ? null : (amount * 100).round(),
+            paidAt: status == PaymentStatus.paid ||
+                    status == PaymentStatus.assumedPaid
+                ? DateTime.now()
+                : null,
+            note: noteController.text.trim().isEmpty
+                ? null
+                : noteController.text.trim(),
+          );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Выплата сохранена')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось сохранить выплату: $error')),
+        );
+      }
+    } finally {
       amountController.dispose();
       noteController.dispose();
-      return;
+    }
+  }
+
+  String? _validatePaymentAmount(String? value) {
+    final text = (value ?? '').trim().replaceAll(',', '.');
+    if (text.isEmpty) {
+      return null;
+    }
+    final amount = double.tryParse(text);
+    if (amount == null) {
+      return 'Введите корректную сумму.';
+    }
+    if (amount < 0) {
+      return 'Сумма не может быть отрицательной.';
     }
 
-    final amount = double.tryParse(amountController.text.replaceAll(',', '.'));
-    await ref.read(paymentsRepositoryProvider).updatePayment(
-          item,
-          status: status,
-          actualAmountMinor: amount == null ? null : (amount * 100).round(),
-          paidAt: status == PaymentStatus.paid ||
-                  status == PaymentStatus.assumedPaid
-              ? DateTime.now()
-              : null,
-          note: noteController.text.trim().isEmpty
-              ? null
-              : noteController.text.trim(),
-        );
-    amountController.dispose();
-    noteController.dispose();
+    return null;
   }
 
   Future<void> _copySummary(PaymentItem item) async {

@@ -153,7 +153,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         OutlinedButton.icon(
                           onPressed: () {
                             _tokenController.clear();
-                            FocusScope.of(context).requestFocus(FocusNode());
+                            FocusScope.of(context).unfocus();
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content:
@@ -186,6 +186,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         helperText:
                             'Используется для оценки свободной рабочей мощности.',
                       ),
+                      validator: _validateWeeklyCapacity,
                     ),
                     const SizedBox(height: 8),
                     SwitchListTile(
@@ -364,6 +365,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         setState(() => _saving = false);
       }
     }
+  }
+
+  String? _validateWeeklyCapacity(String? value) {
+    final capacity = double.tryParse(
+      (value ?? '').trim().replaceAll(',', '.'),
+    );
+    if (capacity == null) {
+      return 'Введите количество часов.';
+    }
+    if (capacity <= 0 || capacity > 168) {
+      return 'Укажите значение от 1 до 168 часов.';
+    }
+
+    return null;
   }
 
   Future<void> _deleteToken() async {
@@ -841,15 +856,31 @@ class DataSafetyPanel extends ConsumerWidget {
       return;
     }
 
-    final decoded = jsonDecode(jsonText);
-    if (decoded is! Map<String, Object?>) {
-      throw const FormatException(
-        'Резервная копия должна быть JSON-объектом.',
-      );
+    try {
+      final decoded = jsonDecode(jsonText);
+      if (decoded is! Map<String, Object?>) {
+        throw const FormatException(
+          'Резервная копия должна быть JSON-объектом.',
+        );
+      }
+      await ref.read(settingsRepositoryProvider).importSettingsBackup(decoded);
+      ref
+        ..invalidate(appSettingsProvider)
+        ..invalidate(kimaiApiClientProvider)
+        ..invalidate(kimaiTokenExistsProvider);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Настройки импортированы')),
+        );
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось импортировать настройки: $error')),
+        );
+      }
     }
-    await ref.read(settingsRepositoryProvider).importSettingsBackup(decoded);
-    ref.invalidate(appSettingsProvider);
-    ref.invalidate(kimaiApiClientProvider);
   }
 
   Future<void> _clearSettings(BuildContext context, WidgetRef ref) async {
