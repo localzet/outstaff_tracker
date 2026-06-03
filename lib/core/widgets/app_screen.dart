@@ -9,6 +9,7 @@ class AppScreen extends StatelessWidget {
     this.subtitle,
     this.actions = const [],
     this.maxContentWidth = 1320,
+    this.expandContent = false,
     super.key,
   });
 
@@ -17,6 +18,7 @@ class AppScreen extends StatelessWidget {
   final List<Widget> actions;
   final List<Widget> children;
   final double maxContentWidth;
+  final bool expandContent;
 
   @override
   Widget build(BuildContext context) {
@@ -66,12 +68,19 @@ class AppScreen extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
             sliver: SliverList.separated(
               itemCount: children.length,
-              itemBuilder: (context, index) => Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: maxContentWidth),
-                  child: children[index],
-                ),
-              ),
+              itemBuilder: (context, index) {
+                final child = children[index];
+                if (expandContent) {
+                  return child;
+                }
+
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: maxContentWidth),
+                    child: child,
+                  ),
+                );
+              },
               separatorBuilder: (context, index) => const SizedBox(height: 16),
             ),
           ),

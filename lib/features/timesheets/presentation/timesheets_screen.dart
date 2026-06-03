@@ -58,6 +58,7 @@ class _TimesheetsScreenState extends ConsumerState<TimesheetsScreen> {
     return AppScreen(
       title: 'Учёт времени',
       subtitle: 'Записи времени из Kimai.',
+      expandContent: true,
       children: [
         AppFilterBar(
           children: [

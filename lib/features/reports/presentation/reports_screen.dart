@@ -51,6 +51,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     return AppScreen(
       title: 'Отчёты',
       subtitle: 'Детализация времени по проектам, периоду, людям и меткам.',
+      expandContent: true,
       actions: [
         OutlinedButton.icon(
           onPressed: _result == null ? null : () => _exportCsv(_result!),

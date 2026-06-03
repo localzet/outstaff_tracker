@@ -45,6 +45,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
     return AppScreen(
       title: 'Выплаты',
       subtitle: 'Ожидаемые, просроченные и полученные выплаты по проектам.',
+      expandContent: true,
       actions: [
         OutlinedButton.icon(
           onPressed: () async {
@@ -278,7 +279,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
         key: 'actions',
         label: 'Действия',
         sortable: false,
-        width: 150,
+        width: 224,
         cellBuilder: (context, item) => _PaymentActions(
           item: item,
           onMarkPaid: () => _markPaid(item),
